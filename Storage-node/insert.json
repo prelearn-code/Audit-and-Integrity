@@ -1,26 +1,21 @@
 {
-    "PK": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
-    "ID_F": "file_001",
-    "ptr": "encrypted_pointer_xyz123",
-    "TS_F": "file_auth_tag_abc456",
-    "state": "valid",
-    "keywords": [
-        {
-            "T_i": "search_token_keyword1_hash",
-            "kt_i": "keyword1"
-        },
-        {
-            "T_i": "search_token_keyword2_hash",
-            "kt_i": "keyword2"
-        },
-        {
-            "T_i": "search_token_keyword3_hash",
-            "kt_i": "keyword3"
-        }
-    ],
-    "metadata": {
-        "description": "示例文件",
-        "tags": ["加密", "测试"],
-        "original_filename": "example.txt"
+  "PK": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "ID_F": "file_001",
+  "ptr": "pointer_to_file_001",
+  "TS_F": "authentication_tag_for_file_001",
+  "state": "valid",
+  "keywords": [
+    {
+      "T_i": "search_token_001",
+      "kt_i": "encrypted_keyword_1"
+    },
+    {
+      "T_i": "search_token_002",
+      "kt_i": "encrypted_keyword_2"
+    },
+    {
+      "T_i": "search_token_003",
+      "kt_i": "encrypted_keyword_3"
     }
+  ]
 }

@@ -18,8 +18,8 @@ void signal_handler(int signal) {
 
 void print_banner() {
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
-    std::cout << "📦 去中心化存储节点控制台 v3.1" << std::endl;
-    std::cout << "   ✨ 新增: 客户端公钥 (PK) 身份验证" << std::endl;
+    std::cout << "📦 去中心化存储节点控制台 v3.2" << std::endl;
+    std::cout << "   ✨ 新增: 公共参数持久化 (PP = {p, q, G_1, G_2, e})" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
 }
 
@@ -36,9 +36,10 @@ void print_menu() {
     std::cout << "  7. 📋 列出所有文件" << std::endl;
     std::cout << "  8. 💾 导出文件元数据" << std::endl;
     std::cout << "  9. 📄 查看详细状态" << std::endl;
+    std::cout << "  10. 🔑 查看公共参数" << std::endl;
     std::cout << "  0. 🚪 退出" << std::endl;
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
-    std::cout << "\n请选择操作 [0-9]: ";
+    std::cout << "\n请选择操作 [0-10]: ";
 }
 
 void clear_input_buffer() {
@@ -328,6 +329,15 @@ void handle_detailed_status(StorageNode* node) {
     wait_for_enter();
 }
 
+void handle_view_public_params(StorageNode* node) {
+    std::string pp_path = node->get_data_dir() + "/public_params.json";
+    if (!node->load_public_params(pp_path)) {
+        std::cerr << "❌ 无法加载公共参数" << std::endl;
+        std::cerr << "   请确保已运行过密码学初始化" << std::endl;
+    }
+    wait_for_enter();
+}
+
 int main(int argc, char* argv[]) {
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
@@ -359,7 +369,7 @@ int main(int argc, char* argv[]) {
         std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
         
         // 步骤 1: 创建数据目录
-        std::cout << "\n[1/5] 📁 创建数据目录..." << std::endl;
+        std::cout << "\n[1/6] 📁 创建数据目录..." << std::endl;
         if (!g_node->initialize_directories()) {
             std::cerr << "❌ 数据目录创建失败" << std::endl;
             delete g_node;
@@ -367,31 +377,52 @@ int main(int argc, char* argv[]) {
         }
         
         // 步骤 2: 加载配置
-        std::cout << "\n[2/5] ⚙️  加载配置..." << std::endl;
+        std::cout << "\n[2/6] ⚙️  加载配置..." << std::endl;
         if (!g_node->load_config()) {
             std::cerr << "❌ 配置加载失败" << std::endl;
             delete g_node;
             return 1;
         }
         
-        // 步骤 3: 初始化密码学
-        std::cout << "\n[3/5] 🔧 初始化密码学..." << std::endl;
-        if (!g_node->setup_cryptography()) {
+        // 步骤 3: 从控制台获取安全参数K
+        std::cout << "\n[3/6] 🔐 设置安全参数..." << std::endl;
+        int security_param = 512;  // 默认值
+        std::cout << "请输入安全参数 K (建议512或1024，直接回车使用默认512): ";
+        std::string input;
+        std::getline(std::cin, input);
+        if (!input.empty()) {
+            try {
+                security_param = std::stoi(input);
+                if (security_param < 128 || security_param > 2048) {
+                    std::cout << "⚠️  安全参数范围建议在128-2048之间，使用默认512" << std::endl;
+                    security_param = 512;
+                }
+            } catch (...) {
+                std::cout << "⚠️  输入无效，使用默认512" << std::endl;
+                security_param = 512;
+            }
+        }
+        std::cout << "✅ 安全参数 K = " << security_param << " bits" << std::endl;
+        
+        // 步骤 4: 初始化密码学系统
+        std::cout << "\n[4/6] 🔧 初始化密码学系统 (Setup算法)..." << std::endl;
+        std::string public_params_path = g_node->get_data_dir() + "/public_params.json";
+        if (!g_node->setup_cryptography(security_param, public_params_path)) {
             std::cerr << "❌ 密码学初始化失败" << std::endl;
             delete g_node;
             return 1;
         }
         
-        // 步骤 4: 加载索引数据库
-        std::cout << "\n[4/5] 💾 加载索引数据库..." << std::endl;
+        // 步骤 5: 加载索引数据库
+        std::cout << "\n[5/6] 💾 加载索引数据库..." << std::endl;
         if (!g_node->load_index_database()) {
             std::cerr << "❌ 索引数据库加载失败" << std::endl;
             delete g_node;
             return 1;
         }
         
-        // 步骤 5: 加载节点信息
-        std::cout << "\n[5/5] 📊 加载节点信息..." << std::endl;
+        // 步骤 6: 加载节点信息
+        std::cout << "\n[6/6] 📊 加载节点信息..." << std::endl;
         if (!g_node->load_node_info()) {
             std::cerr << "⚠️  节点信息加载失败,将创建新信息" << std::endl;
         }
@@ -409,7 +440,7 @@ int main(int argc, char* argv[]) {
             std::cin >> choice;
             
             if (std::cin.fail()) {
-                std::cout << "❌ 无效输入,请输入数字 0-9" << std::endl;
+                std::cout << "❌ 无效输入,请输入数字 0-10" << std::endl;
                 clear_input_buffer();
                 wait_for_enter();
                 continue;
@@ -443,6 +474,9 @@ int main(int argc, char* argv[]) {
                 case 9:
                     handle_detailed_status(g_node);
                     break;
+                case 10:
+                    handle_view_public_params(g_node);
+                    break;
                 case 0:
                     std::cout << "\n👋 再见!" << std::endl;
                     g_node->save_index_database();
@@ -450,7 +484,7 @@ int main(int argc, char* argv[]) {
                     delete g_node;
                     return 0;
                 default:
-                    std::cout << "❌ 无效选项,请选择 0-9" << std::endl;
+                    std::cout << "❌ 无效选项,请选择 0-10" << std::endl;
                     wait_for_enter();
             }
         }

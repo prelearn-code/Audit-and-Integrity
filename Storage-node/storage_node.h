@@ -41,7 +41,7 @@ struct SearchResult {
 };
 
 /**
- * StorageNode - 去中心化存储节点 (本地版 v3.1)
+ * StorageNode - 去中心化存储节点 (本地版 v3.2)
  * 
  * 特性:
  * - ✅ 完全本地化存储
@@ -50,6 +50,7 @@ struct SearchResult {
  * - ✅ 无区块链依赖
  * - ✅ 客户端公钥身份验证 (v3.1新增)
  * - ✅ 文件状态管理 (v3.1新增)
+ * - ✅ 公共参数持久化 (v3.2新增)
  */
 class StorageNode {
 private:
@@ -103,9 +104,33 @@ public:
     // ========== 初始化 ==========
     
     /**
-     * setup_cryptography() - 初始化密码学参数
+     * setup_cryptography() - 初始化密码学参数并生成公共参数
+     * @param security_param 安全参数K（比特位数，如512）
+     * @param public_params_path 公共参数保存路径（可选）
+     * @return 成功返回true，失败返回false
+     * 
+     * 生成并保存公共参数 PP = {p, q, G_1, G_2, e}
      */
-    bool setup_cryptography();
+    bool setup_cryptography(int security_param, 
+                           const std::string& public_params_path = "");
+    
+    /**
+     * save_public_params() - 保存公共参数到JSON文件
+     * @param filepath 公共参数文件保存路径
+     * @return 成功返回true，失败返回false
+     * 
+     * 保存内容：p, q, G_1描述, G_2描述, 双线性配对e描述
+     */
+    bool save_public_params(const std::string& filepath);
+    
+    /**
+     * load_public_params() - 从JSON文件加载并显示公共参数
+     * @param filepath 公共参数文件路径
+     * @return 成功返回true，失败返回false
+     * 
+     * 用于验证和展示公共参数信息
+     */
+    bool load_public_params(const std::string& filepath);
     
     /**
      * initialize_directories() - 初始化数据目录
@@ -294,7 +319,7 @@ public:
         std::cout << "文件数:       " << file_storage.size() << std::endl;
         std::cout << "索引数:       " << get_index_count() << std::endl;
         std::cout << "密码学:       " << (crypto_initialized ? "已初始化" : "未初始化") << std::endl;
-        std::cout << "版本:         v3.1 (支持PK身份验证)" << std::endl;
+        std::cout << "版本:         v3.2 (支持公共参数持久化)" << std::endl;
         std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     }
     

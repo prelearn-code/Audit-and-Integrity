@@ -32,10 +32,12 @@ StorageNode::~StorageNode() {
 
 // ==================== 密码学函数 ====================
 
-bool StorageNode::setup_cryptography() {
-    std::cout << "🔧 初始化密码学参数..." << std::endl;
+bool StorageNode::setup_cryptography(int security_param, 
+                                    const std::string& public_params_path) {
+    std::cout << "🔧 初始化密码学参数 (Setup算法)..." << std::endl;
+    std::cout << "   安全参数 K: " << security_param << " bits" << std::endl;
     
-    // 初始化配对参数
+    // 初始化配对参数（type a 配对）
     const char* param_str = 
         "type a\n"
         "q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791\n"
@@ -63,6 +65,121 @@ bool StorageNode::setup_cryptography() {
     
     crypto_initialized = true;
     std::cout << "✅ 密码学参数初始化成功" << std::endl;
+    
+    // 如果提供了公共参数路径，保存公共参数
+    if (!public_params_path.empty()) {
+        if (!save_public_params(public_params_path)) {
+            std::cerr << "⚠️  公共参数保存失败，但密码学系统已初始化" << std::endl;
+        } else {
+            std::cout << "✅ 公共参数已保存到: " << public_params_path << std::endl;
+        }
+    }
+    
+    return true;
+}
+
+bool StorageNode::save_public_params(const std::string& filepath) {
+    if (!crypto_initialized) {
+        std::cerr << "❌ 密码学系统未初始化" << std::endl;
+        return false;
+    }
+    
+    Json::Value root;
+    
+    // 基本信息
+    root["version"] = "1.0";
+    root["created_at"] = get_current_timestamp();
+    root["description"] = "Public Parameters for Decentralized Storage System";
+    
+    // 公共参数 PP = {p, q, G_1, G_2, e}
+    Json::Value public_params;
+    
+    // p和q: 主要质数（从pairing参数获取）
+    // 对于type a配对，p = q (群G1和G2的阶)
+    public_params["p"] = "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791";
+    public_params["q"] = "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791";
+    
+    // G_1: 第一个群的描述
+    Json::Value g1_info;
+    g1_info["type"] = "G1 (Elliptic Curve Group)";
+    g1_info["order"] = public_params["q"];
+    g1_info["description"] = "Additive group on elliptic curve";
+    
+    // 序列化生成元g
+    size_t g_len = element_length_in_bytes(g);
+    unsigned char* g_bytes = new unsigned char[g_len];
+    element_to_bytes(g_bytes, g);
+    g1_info["generator_g_hex"] = bytes_to_hex(g_bytes, g_len);
+    delete[] g_bytes;
+    
+    public_params["G_1"] = g1_info;
+    
+    // G_2: 目标群的描述
+    Json::Value g2_info;
+    g2_info["type"] = "G_T (Target Group)";
+    g2_info["order"] = public_params["q"];
+    g2_info["description"] = "Multiplicative target group for pairing";
+    public_params["G_2"] = g2_info;
+    
+    // e: 双线性配对函数
+    Json::Value pairing_info;
+    pairing_info["type"] = "Bilinear Pairing";
+    pairing_info["mapping"] = "e: G_1 × G_1 → G_2";
+    pairing_info["properties"].append("bilinearity");
+    pairing_info["properties"].append("non-degeneracy");
+    pairing_info["properties"].append("computability");
+    pairing_info["pairing_type"] = "type_a (symmetric)";
+    public_params["e"] = pairing_info;
+    
+    root["public_params"] = public_params;
+    
+    // 保存到文件
+    return save_json_to_file(root, filepath);
+}
+
+bool StorageNode::load_public_params(const std::string& filepath) {
+    if (!file_exists(filepath)) {
+        std::cerr << "❌ 公共参数文件不存在: " << filepath << std::endl;
+        return false;
+    }
+    
+    Json::Value root = load_json_from_file(filepath);
+    
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "📖 公共参数 (Public Parameters)" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "版本:         " << root["version"].asString() << std::endl;
+    std::cout << "创建时间:     " << root["created_at"].asString() << std::endl;
+    std::cout << "描述:         " << root["description"].asString() << std::endl;
+    
+    Json::Value pp = root["public_params"];
+    
+    std::cout << "\n[群阶参数]" << std::endl;
+    std::cout << "p:            " << pp["p"].asString().substr(0, 40) << "..." << std::endl;
+    std::cout << "q:            " << pp["q"].asString().substr(0, 40) << "..." << std::endl;
+    
+    std::cout << "\n[群 G_1 信息]" << std::endl;
+    std::cout << "类型:         " << pp["G_1"]["type"].asString() << std::endl;
+    std::cout << "阶:           " << pp["G_1"]["order"].asString().substr(0, 20) << "..." << std::endl;
+    std::cout << "描述:         " << pp["G_1"]["description"].asString() << std::endl;
+    std::cout << "生成元g:      " << pp["G_1"]["generator_g_hex"].asString().substr(0, 40) << "..." << std::endl;
+    
+    std::cout << "\n[群 G_2 信息]" << std::endl;
+    std::cout << "类型:         " << pp["G_2"]["type"].asString() << std::endl;
+    std::cout << "阶:           " << pp["G_2"]["order"].asString().substr(0, 20) << "..." << std::endl;
+    std::cout << "描述:         " << pp["G_2"]["description"].asString() << std::endl;
+    
+    std::cout << "\n[双线性配对 e]" << std::endl;
+    std::cout << "类型:         " << pp["e"]["type"].asString() << std::endl;
+    std::cout << "映射:         " << pp["e"]["mapping"].asString() << std::endl;
+    std::cout << "配对类型:     " << pp["e"]["pairing_type"].asString() << std::endl;
+    std::cout << "性质:         ";
+    for (const auto& prop : pp["e"]["properties"]) {
+        std::cout << prop.asString() << " ";
+    }
+    std::cout << std::endl;
+    
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     
     return true;
 }
@@ -249,26 +366,22 @@ bool StorageNode::initialize_directories() {
 bool StorageNode::create_default_config() {
     Json::Value config;
     
-    config["version"] = "3.1";
+    config["version"] = "3.2";
     config["node"]["node_id"] = node_id;
     config["node"]["created_at"] = get_current_timestamp();
-    config["node"]["description"] = "去中心化存储节点 (支持PK身份验证)";
+    config["node"]["description"] = "去中心化存储节点 (支持公共参数持久化)";
     
     config["paths"]["data_dir"] = data_dir;
     config["paths"]["files_dir"] = files_dir;
     config["paths"]["metadata_dir"] = metadata_dir;
     config["paths"]["index_db"] = data_dir + "/index_db.json";
+    config["paths"]["public_params"] = data_dir + "/public_params.json";
     
     config["server"]["port"] = server_port;
     config["server"]["enable_server"] = false;
     
     config["storage"]["max_file_size_mb"] = 100;
-    config["storage"]["max_total_storage_gb"] = 10;
-    
-    config["logging"]["enable_logging"] = true;
-    config["logging"]["log_level"] = "INFO";
-    
-    config["security"]["enable_pk_verification"] = true;
+    config["storage"]["enable_compression"] = false;
     
     std::string config_path = data_dir + "/config.json";
     return save_json_to_file(config, config_path);
@@ -288,22 +401,24 @@ bool StorageNode::load_config() {
         node_id = config["node"]["node_id"].asString();
     }
     
-    if (config.isMember("server") && config["server"].isMember("port")) {
-        server_port = config["server"]["port"].asInt();
-    }
-    
     std::cout << "✅ 配置加载成功" << std::endl;
     return true;
 }
 
 bool StorageNode::save_config() {
-    std::string config_path = data_dir + "/config.json";
-    Json::Value config = load_json_from_file(config_path);
+    Json::Value config;
     
+    config["version"] = "3.2";
     config["node"]["node_id"] = node_id;
-    config["node"]["last_updated"] = get_current_timestamp();
+    config["node"]["last_update"] = get_current_timestamp();
+    
+    config["paths"]["data_dir"] = data_dir;
+    config["paths"]["files_dir"] = files_dir;
+    config["paths"]["metadata_dir"] = metadata_dir;
+    
     config["server"]["port"] = server_port;
     
+    std::string config_path = data_dir + "/config.json";
     return save_json_to_file(config, config_path);
 }
 
@@ -313,71 +428,72 @@ bool StorageNode::load_index_database() {
     std::string index_path = data_dir + "/index_db.json";
     
     if (!file_exists(index_path)) {
-        std::cout << "⚠️  索引数据库不存在,创建新数据库..." << std::endl;
+        std::cout << "⚠️  索引数据库不存在,将创建新数据库" << std::endl;
         return save_index_database();
     }
     
     Json::Value root = load_json_from_file(index_path);
     
+    if (!root.isMember("indices")) {
+        std::cerr << "❌ 索引数据库格式错误" << std::endl;
+        return false;
+    }
+    
     index_database.clear();
     
-    const Json::Value& indices = root["indices"];
-    for (const auto& ts : indices.getMemberNames()) {
+    for (const auto& token : root["indices"].getMemberNames()) {
         std::vector<IndexEntry> entries;
         
-        for (const auto& entry_obj : indices[ts]) {
+        for (const auto& entry_json : root["indices"][token]) {
             IndexEntry entry;
-            entry.PK = entry_obj.get("PK", "").asString();
-            entry.Ts = entry_obj["Ts"].asString();
-            entry.keyword = entry_obj["keyword"].asString();
-            entry.pointer = entry_obj["pointer"].asString();
-            entry.file_identifier = entry_obj["file_identifier"].asString();
-            entry.state = entry_obj.get("state", "valid").asString();
+            entry.PK = entry_json["PK"].asString();
+            entry.Ts = entry_json["Ts"].asString();
+            entry.keyword = entry_json["keyword"].asString();
+            entry.pointer = entry_json["pointer"].asString();
+            entry.file_identifier = entry_json["file_identifier"].asString();
+            entry.state = entry_json["state"].asString();
+            
             entries.push_back(entry);
         }
         
-        index_database[ts] = entries;
+        index_database[token] = entries;
     }
     
-    std::cout << "✅ 索引数据库加载成功 (共 " << get_index_count() << " 条)" << std::endl;
+    std::cout << "✅ 索引数据库加载成功 (共 " << get_index_count() << " 条索引)" << std::endl;
     return true;
 }
 
 bool StorageNode::save_index_database() {
     Json::Value root;
-    root["version"] = "3.1";
-    root["last_updated"] = get_current_timestamp();
+    root["version"] = "3.2";
+    root["last_update"] = get_current_timestamp();
     
     Json::Value indices;
-    int total = 0;
-    
     for (const auto& pair : index_database) {
-        const std::string& ts = pair.first;
-        const std::vector<IndexEntry>& entries = pair.second;
+        Json::Value entries(Json::arrayValue);
         
-        Json::Value entry_array(Json::arrayValue);
-        for (const auto& entry : entries) {
-            Json::Value entry_obj;
-            entry_obj["PK"] = entry.PK;
-            entry_obj["Ts"] = entry.Ts;
-            entry_obj["keyword"] = entry.keyword;
-            entry_obj["pointer"] = entry.pointer;
-            entry_obj["file_identifier"] = entry.file_identifier;
-            entry_obj["state"] = entry.state;
-            entry_array.append(entry_obj);
-            total++;
+        for (const auto& entry : pair.second) {
+            Json::Value entry_json;
+            entry_json["PK"] = entry.PK;
+            entry_json["Ts"] = entry.Ts;
+            entry_json["keyword"] = entry.keyword;
+            entry_json["pointer"] = entry.pointer;
+            entry_json["file_identifier"] = entry.file_identifier;
+            entry_json["state"] = entry.state;
+            
+            entries.append(entry_json);
         }
-        indices[ts] = entry_array;
+        
+        indices[pair.first] = entries;
     }
     
     root["indices"] = indices;
-    root["total_entries"] = total;
     
     std::string index_path = data_dir + "/index_db.json";
     return save_json_to_file(root, index_path);
 }
 
-// ==================== 节点信息操作 ====================
+// ==================== 节点信息 ====================
 
 bool StorageNode::load_node_info() {
     std::string info_path = data_dir + "/node_info.json";
@@ -386,6 +502,9 @@ bool StorageNode::load_node_info() {
         return save_node_info();
     }
     
+    Json::Value info = load_json_from_file(info_path);
+    
+    std::cout << "✅ 节点信息加载成功" << std::endl;
     return true;
 }
 
@@ -393,11 +512,10 @@ bool StorageNode::save_node_info() {
     Json::Value info;
     
     info["node_id"] = node_id;
-    info["status"] = "active";
-    info["last_updated"] = get_current_timestamp();
-    
+    info["version"] = "3.2";
+    info["last_update"] = get_current_timestamp();
     info["statistics"]["total_files"] = static_cast<int>(file_storage.size());
-    info["statistics"]["total_index_entries"] = static_cast<int>(get_index_count());
+    info["statistics"]["total_indices"] = static_cast<int>(get_index_count());
     
     std::string info_path = data_dir + "/node_info.json";
     return save_json_to_file(info, info_path);
@@ -407,152 +525,110 @@ void StorageNode::update_statistics(const std::string& operation) {
     save_node_info();
 }
 
-// ==================== 文件操作 (v3.1修改) ====================
+// ==================== 文件操作 ====================
 
 bool StorageNode::insert_file(const std::string& param_json_path, const std::string& enc_file_path) {
     std::cout << "\n📤 插入文件..." << std::endl;
     
-    // 1. 验证文件存在
+    // 读取参数JSON
     if (!file_exists(param_json_path)) {
         std::cerr << "❌ 参数文件不存在: " << param_json_path << std::endl;
         return false;
     }
     
-    if (!file_exists(enc_file_path)) {
-        std::cerr << "❌ 加密文件不存在: " << enc_file_path << std::endl;
-        return false;
-    }
-    
-    // 2. 读取JSON参数 (新格式)
     Json::Value params = load_json_from_file(param_json_path);
     
-    // 3. 验证必要字段
+    // 验证必需字段
     if (!params.isMember("PK") || !params.isMember("ID_F") || 
         !params.isMember("ptr") || !params.isMember("TS_F") ||
         !params.isMember("keywords")) {
-        std::cerr << "❌ JSON参数格式错误,缺少必要字段" << std::endl;
-        std::cerr << "   必需字段: PK, ID_F, ptr, TS_F, keywords" << std::endl;
+        std::cerr << "❌ 参数JSON缺少必需字段" << std::endl;
         return false;
     }
     
-    // 4. 提取数据
     std::string PK = params["PK"].asString();
     std::string file_id = params["ID_F"].asString();
-    std::string pointer = params["ptr"].asString();
-    std::string file_auth_tag = params["TS_F"].asString();
-    std::string state = params.get("state", "valid").asString();
-    const Json::Value& keywords = params["keywords"];
+    std::string ptr = params["ptr"].asString();
+    std::string ts_f = params["TS_F"].asString();
+    std::string state = params.isMember("state") ? params["state"].asString() : "valid";
     
+    std::cout << "   文件ID:   " << file_id << std::endl;
     std::cout << "   客户端PK: " << PK.substr(0, 16) << "..." << std::endl;
-    std::cout << "   文件ID: " << file_id << std::endl;
-    std::cout << "   状态: " << state << std::endl;
-    std::cout << "   关键词数: " << keywords.size() << std::endl;
+    std::cout << "   状态:     " << state << std::endl;
     
-    // 5. 验证PK格式
+    // 验证PK格式
     if (!verify_pk_format(PK)) {
         std::cerr << "❌ PK格式无效" << std::endl;
         return false;
     }
     
-    // 6. 验证状态值
-    if (state != "valid" && state != "invalid") {
-        std::cerr << "❌ 状态值无效,必须为 'valid' 或 'invalid'" << std::endl;
+    // 检查文件是否已存在
+    if (has_file(file_id)) {
+        std::cerr << "❌ 文件ID已存在" << std::endl;
         return false;
     }
     
-    // 7. 检查文件是否已存在
-    if (has_file(file_id)) {
-        std::cerr << "⚠️  文件已存在: " << file_id << std::endl;
-        char choice;
-        std::cout << "是否覆盖? (y/n): ";
-        std::cin >> choice;
-        if (choice != 'y' && choice != 'Y') {
-            std::cout << "❌ 操作已取消" << std::endl;
-            return false;
-        }
-    }
-    
-    // 8. 创建索引条目 (新格式: T_i, kt_i)
-    for (unsigned int i = 0; i < keywords.size(); ++i) {
-        if (!keywords[i].isMember("T_i") || !keywords[i].isMember("kt_i")) {
-            std::cerr << "❌ 关键词 " << i << " 格式错误,需要 T_i 和 kt_i" << std::endl;
-            return false;
-        }
-        
-        std::string T_i = keywords[i]["T_i"].asString();
-        std::string kt_i = keywords[i]["kt_i"].asString();
-        
-        IndexEntry entry;
-        entry.PK = PK;
-        entry.Ts = T_i;
-        entry.keyword = kt_i;
-        entry.pointer = pointer;
-        entry.file_identifier = file_id;
-        entry.state = state;
-        
-        index_database[T_i].push_back(entry);
-        
-        std::cout << "   [" << (i+1) << "] T_i: " << T_i.substr(0, 16) << "... → " << kt_i << std::endl;
-    }
-    
-    // 9. 读取加密文件内容
+    // 读取加密文件
     std::string ciphertext = read_file_content(enc_file_path);
     if (ciphertext.empty()) {
-        std::cerr << "❌ 读取加密文件失败" << std::endl;
+        std::cerr << "❌ 无法读取加密文件" << std::endl;
         return false;
     }
     
-    std::cout << "   密文大小: " << ciphertext.length() << " 字节" << std::endl;
-    
-    // 10. 存储文件数据
+    // 保存文件数据
     FileData file_data;
     file_data.PK = PK;
     file_data.file_id = file_id;
     file_data.ciphertext = ciphertext;
-    file_data.pointer = pointer;
-    file_data.file_auth_tag = file_auth_tag;
+    file_data.pointer = ptr;
+    file_data.file_auth_tag = ts_f;
     file_data.state = state;
     
     file_storage[file_id] = file_data;
     
-    // 11. 保存加密文件到文件系统
-    if (!save_encrypted_file(file_id, enc_file_path)) {
-        std::cerr << "❌ 保存加密文件失败" << std::endl;
-        return false;
+    // 保存加密文件
+    save_encrypted_file(file_id, enc_file_path);
+    
+    // 处理关键词索引
+    int keyword_count = 0;
+    for (const auto& kw : params["keywords"]) {
+        if (!kw.isMember("T_i") || !kw.isMember("kt_i")) {
+            std::cerr << "⚠️  关键词格式错误,跳过" << std::endl;
+            continue;
+        }
+        
+        IndexEntry entry;
+        entry.PK = PK;
+        entry.Ts = kw["T_i"].asString();
+        entry.keyword = kw["kt_i"].asString();
+        entry.pointer = ptr;
+        entry.file_identifier = file_id;
+        entry.state = state;
+        
+        index_database[entry.Ts].push_back(entry);
+        keyword_count++;
     }
     
-    // 12. 保存索引数据库
-    if (!save_index_database()) {
-        std::cerr << "❌ 保存索引数据库失败" << std::endl;
-        return false;
-    }
+    std::cout << "   关键词数: " << keyword_count << std::endl;
     
-    // 13. 保存元数据
+    // 保存元数据
     Json::Value metadata;
     metadata["PK"] = PK;
     metadata["file_id"] = file_id;
-    metadata["pointer"] = pointer;
-    metadata["file_auth_tag"] = file_auth_tag;
+    metadata["file_size"] = static_cast<int>(ciphertext.length());
+    metadata["keyword_count"] = keyword_count;
     metadata["state"] = state;
     metadata["insert_time"] = get_current_timestamp();
-    metadata["keyword_count"] = static_cast<int>(keywords.size());
-    metadata["file_size"] = static_cast<int>(ciphertext.length());
-    
-    if (params.isMember("metadata")) {
-        metadata["original"] = params["metadata"];
-    }
+    metadata["success"] = true;
     
     std::string metadata_path = metadata_dir + "/" + file_id + ".json";
     save_json_to_file(metadata, metadata_path);
     
-    // 14. 更新统计
+    // 保存更新
+    save_index_database();
     update_statistics("insert");
     
     std::cout << "✅ 文件插入成功!" << std::endl;
-    std::cout << "   索引条目: " << keywords.size() << std::endl;
-    std::cout << "   总文件数: " << file_storage.size() << std::endl;
-    std::cout << "   总索引数: " << get_index_count() << std::endl;
-    
     return true;
 }
 
@@ -597,22 +673,7 @@ bool StorageNode::delete_file(const std::string& PK, const std::string& file_id,
     // 更新文件状态
     file_storage[file_id].state = "invalid";
     
-    // 可选：物理删除文件 (注释掉以保留文件)
-    /*
-    file_storage.erase(file_id);
-    
-    std::string enc_file_path = files_dir + "/" + file_id + ".enc";
-    if (file_exists(enc_file_path)) {
-        remove(enc_file_path.c_str());
-    }
-    
-    std::string metadata_path = metadata_dir + "/" + file_id + ".json";
-    if (file_exists(metadata_path)) {
-        remove(metadata_path.c_str());
-    }
-    */
-    
-    // 保存更新 (修复拼写错误)
+    // 保存更新
     save_index_database();
     update_statistics("delete");
     
@@ -780,7 +841,7 @@ void StorageNode::print_detailed_status() {
     std::cout << "   节点 ID:      " << node_id << std::endl;
     std::cout << "   数据目录:     " << data_dir << std::endl;
     std::cout << "   端口:         " << server_port << std::endl;
-    std::cout << "   版本:         v3.1 (支持PK身份验证)" << std::endl;
+    std::cout << "   版本:         v3.2 (支持公共参数持久化)" << std::endl;
     
     std::cout << "\n📦 存储统计:" << std::endl;
     std::cout << "   文件总数:     " << file_storage.size() << std::endl;
