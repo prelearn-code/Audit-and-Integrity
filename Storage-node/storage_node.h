@@ -17,18 +17,21 @@
 #include <json/json.h>
 
 struct IndexEntry {
-    std::string Ts;              // 状态令牌
-    std::string keyword;         // 关键词
+    std::string PK;              // 客户端公钥 (新增)
+    std::string Ts;              // 状态令牌 (T_i)
+    std::string keyword;         // 关键词 (kt_i)
     std::string pointer;         // 加密指针
-    std::string file_identifier; // 文件标识符
-    bool valid;                  // 是否有效
+    std::string file_identifier; // 文件标识符 (ID_F)
+    std::string state;           // 状态: "valid" 或 "invalid" (修改为string)
 };
 
 struct FileData {
-    std::string file_id;         // 文件ID
+    std::string PK;              // 客户端公钥 (新增)
+    std::string file_id;         // 文件ID (ID_F)
     std::string ciphertext;      // 加密文本
-    std::string pointer;         // 文件指针
-    std::string file_auth_tag;   // 文件认证标签
+    std::string pointer;         // 文件指针 (ptr)
+    std::string file_auth_tag;   // 文件认证标签 (TS_F)
+    std::string state;           // 状态: "valid" 或 "invalid" (新增)
 };
 
 struct SearchResult {
@@ -38,13 +41,15 @@ struct SearchResult {
 };
 
 /**
- * StorageNode - 去中心化存储节点 (本地版 v3.0)
+ * StorageNode - 去中心化存储节点 (本地版 v3.1)
  * 
  * 特性:
  * - ✅ 完全本地化存储
  * - ✅ JSON文件持久化
  * - ✅ 交互式控制台
  * - ✅ 无区块链依赖
+ * - ✅ 客户端公钥身份验证 (v3.1新增)
+ * - ✅ 文件状态管理 (v3.1新增)
  */
 class StorageNode {
 private:
@@ -87,6 +92,9 @@ private:
     // 辅助函数
     std::string bytes_to_hex(const unsigned char* data, size_t len);
     std::vector<unsigned char> hex_to_bytes(const std::string& hex);
+    
+    // 身份验证 (v3.1新增)
+    bool verify_pk_format(const std::string& pk);
 
 public:
     StorageNode(const std::string& data_directory = "./data", int port = 9000);
@@ -148,24 +156,45 @@ public:
      */
     void update_statistics(const std::string& operation);
     
-    // ========== 文件操作 ==========
+    // ========== 文件操作 (v3.1修改) ==========
     
     /**
-     * insert_file() - 插入文件 (新接口)
-     * @param param_json_path 参数JSON文件路径
+     * insert_file() - 插入文件 (v3.1: 使用新的JSON格式)
+     * @param param_json_path 参数JSON文件路径，包含PK, ID_F, ptr, TS_F, state, keywords等
      * @param enc_file_path 加密文件路径
+     * 
+     * JSON格式:
+     * {
+     *   "PK": "客户端公钥",
+     *   "ID_F": "文件唯一标识",
+     *   "ptr": "文件指针",
+     *   "TS_F": "文件认证标签",
+     *   "state": "valid",
+     *   "keywords": [
+     *     {"T_i": "状态令牌1", "kt_i": "关键词1"},
+     *     {"T_i": "状态令牌2", "kt_i": "关键词2"}
+     *   ]
+     * }
      */
     bool insert_file(const std::string& param_json_path, const std::string& enc_file_path);
     
     /**
-     * delete_file() - 删除文件
+     * delete_file() - 删除文件 (v3.1: 增加PK身份验证)
+     * @param PK 客户端公钥，用于身份验证
+     * @param file_id 文件ID
+     * @param del_proof 删除证明
      */
-    bool delete_file(const std::string& file_id, const std::string& del_proof);
+    bool delete_file(const std::string& PK, const std::string& file_id, const std::string& del_proof);
     
     /**
-     * search_keyword() - 搜索关键词
+     * search_keyword() - 搜索关键词 (v3.1: 增加PK过滤)
+     * @param PK 客户端公钥，只返回该客户端的文件
+     * @param search_token 搜索令牌
+     * @param latest_state 最新状态
+     * @param seed 种子
      */
-    SearchResult search_keyword(const std::string& search_token, 
+    SearchResult search_keyword(const std::string& PK,
+                               const std::string& search_token, 
                                const std::string& latest_state,
                                const std::string& seed);
     
@@ -214,6 +243,11 @@ public:
      */
     std::vector<std::string> list_all_files();
     
+    /**
+     * list_files_by_pk() - 列出指定PK的所有文件 (v3.1新增)
+     */
+    std::vector<std::string> list_files_by_pk(const std::string& PK);
+    
     // ========== Getters ==========
     
     std::string get_node_id() const {
@@ -260,6 +294,7 @@ public:
         std::cout << "文件数:       " << file_storage.size() << std::endl;
         std::cout << "索引数:       " << get_index_count() << std::endl;
         std::cout << "密码学:       " << (crypto_initialized ? "已初始化" : "未初始化") << std::endl;
+        std::cout << "版本:         v3.1 (支持PK身份验证)" << std::endl;
         std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     }
     

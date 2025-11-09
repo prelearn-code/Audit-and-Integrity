@@ -6,9 +6,9 @@
     },
     "node" : 
     {
-        "created_at" : "2025-11-09T13:58:51Z",
-        "description" : "\u53bb\u4e2d\u5fc3\u5316\u5b58\u50a8\u8282\u70b9",
-        "node_id" : "node_1762667931"
+        "created_at" : "2025-11-09T19:17:05Z",
+        "description" : "\u53bb\u4e2d\u5fc3\u5316\u5b58\u50a8\u8282\u70b9 (\u652f\u6301PK\u8eab\u4efd\u9a8c\u8bc1)",
+        "node_id" : "node_1762687025"
     },
     "paths" : 
     {
@@ -16,6 +16,10 @@
         "files_dir" : "./data/files",
         "index_db" : "./data/index_db.json",
         "metadata_dir" : "./data/metadata"
+    },
+    "security" : 
+    {
+        "enable_pk_verification" : true
     },
     "server" : 
     {
@@ -27,5 +31,5 @@
         "max_file_size_mb" : 100,
         "max_total_storage_gb" : 10
     },
-    "version" : "3.0"
+    "version" : "3.1"
 }

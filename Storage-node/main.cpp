@@ -18,7 +18,8 @@ void signal_handler(int signal) {
 
 void print_banner() {
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
-    std::cout << "📦 去中心化存储节点控制台 v3.0" << std::endl;
+    std::cout << "📦 去中心化存储节点控制台 v3.1" << std::endl;
+    std::cout << "   ✨ 新增: 客户端公钥 (PK) 身份验证" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
 }
 
@@ -26,10 +27,10 @@ void print_menu() {
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     std::cout << "📋 主菜单" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
-    std::cout << "\n  1. 📤 插入文件" << std::endl;
-    std::cout << "  2. 🔍 搜索关键词" << std::endl;
+    std::cout << "\n  1. 📤 插入文件 (需要JSON参数文件)" << std::endl;
+    std::cout << "  2. 🔍 搜索关键词 (需要PK验证)" << std::endl;
     std::cout << "  3. 📥 检索文件" << std::endl;
-    std::cout << "  4. 🗑️  删除文件" << std::endl;
+    std::cout << "  4. 🗑️  删除文件 (需要PK验证)" << std::endl;
     std::cout << "  5. 🔐 生成完整性证明" << std::endl;
     std::cout << "  6. 📊 查看节点状态" << std::endl;
     std::cout << "  7. 📋 列出所有文件" << std::endl;
@@ -58,6 +59,14 @@ void handle_insert_file(StorageNode* node) {
     
     std::string param_json_path, enc_file_path;
     
+    std::cout << "\n💡 提示: JSON参数文件应包含以下字段:" << std::endl;
+    std::cout << "   - PK: 客户端公钥" << std::endl;
+    std::cout << "   - ID_F: 文件唯一标识" << std::endl;
+    std::cout << "   - ptr: 文件指针" << std::endl;
+    std::cout << "   - TS_F: 文件认证标签" << std::endl;
+    std::cout << "   - state: 文件状态 (valid/invalid)" << std::endl;
+    std::cout << "   - keywords: 关键词数组 [{'T_i': '...', 'kt_i': '...'}]" << std::endl;
+    
     std::cout << "\n请输入参数JSON文件路径: ";
     clear_input_buffer();
     std::getline(std::cin, param_json_path);
@@ -79,10 +88,13 @@ void handle_search_keyword(StorageNode* node) {
     std::cout << "🔍 搜索关键词" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     
-    std::string search_token, latest_state, seed;
+    std::string pk, search_token, latest_state, seed;
     
-    std::cout << "\n请输入搜索令牌 (Ts): ";
+    std::cout << "\n请输入客户端公钥 (PK): ";
     clear_input_buffer();
+    std::getline(std::cin, pk);
+    
+    std::cout << "请输入搜索令牌 (T_i): ";
     std::getline(std::cin, search_token);
     
     std::cout << "请输入最新状态 (可选): ";
@@ -91,7 +103,7 @@ void handle_search_keyword(StorageNode* node) {
     std::cout << "请输入种子 (可选): ";
     std::getline(std::cin, seed);
     
-    SearchResult result = node->search_keyword(search_token, latest_state, seed);
+    SearchResult result = node->search_keyword(pk, search_token, latest_state, seed);
     
     std::cout << "\n📊 搜索结果:" << std::endl;
     std::cout << "   找到 " << result.file_identifiers.size() << " 个匹配文件" << std::endl;
@@ -105,6 +117,12 @@ void handle_search_keyword(StorageNode* node) {
             }
             std::cout << std::endl;
         }
+    } else {
+        std::cout << "\n⚠️  未找到匹配的文件" << std::endl;
+        std::cout << "   请检查:" << std::endl;
+        std::cout << "   1. PK是否正确" << std::endl;
+        std::cout << "   2. 搜索令牌是否正确" << std::endl;
+        std::cout << "   3. 文件状态是否为 'valid'" << std::endl;
     }
     
     wait_for_enter();
@@ -126,9 +144,11 @@ void handle_retrieve_file(StorageNode* node) {
     if (result["success"].asBool()) {
         std::cout << "\n✅ 文件检索成功!" << std::endl;
         std::cout << "   文件ID:       " << result["file_id"].asString() << std::endl;
+        std::cout << "   客户端PK:     " << result["PK"].asString().substr(0, 16) << "..." << std::endl;
         std::cout << "   密文大小:     " << result["ciphertext"].asString().length() << " 字节" << std::endl;
         std::cout << "   指针:         " << result["pointer"].asString().substr(0, 32) << "..." << std::endl;
         std::cout << "   认证标签:     " << result["file_auth_tag"].asString().substr(0, 32) << "..." << std::endl;
+        std::cout << "   状态:         " << result["state"].asString() << std::endl;
         
         char save_choice;
         std::cout << "\n是否保存密文到文件? (y/n): ";
@@ -161,22 +181,26 @@ void handle_delete_file(StorageNode* node) {
     std::cout << "🗑️  删除文件" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     
-    std::string file_id, del_proof;
+    std::string pk, file_id, del_proof;
     
-    std::cout << "\n请输入文件ID: ";
+    std::cout << "\n请输入客户端公钥 (PK): ";
     clear_input_buffer();
+    std::getline(std::cin, pk);
+    
+    std::cout << "请输入文件ID: ";
     std::getline(std::cin, file_id);
     
     std::cout << "请输入删除证明 (可选): ";
     std::getline(std::cin, del_proof);
     
-    std::cout << "\n⚠️  警告: 此操作将永久删除文件!" << std::endl;
+    std::cout << "\n⚠️  警告: 此操作将标记文件为无效!" << std::endl;
+    std::cout << "   只有文件所有者 (PK匹配) 才能删除文件" << std::endl;
     char confirm;
     std::cout << "确认删除? (y/n): ";
     std::cin >> confirm;
     
     if (confirm == 'y' || confirm == 'Y') {
-        if (node->delete_file(file_id, del_proof)) {
+        if (node->delete_file(pk, file_id, del_proof)) {
             std::cout << "\n✅ 文件已删除!" << std::endl;
         } else {
             std::cout << "\n❌ 删除失败!" << std::endl;
@@ -254,11 +278,17 @@ void handle_list_files(StorageNode* node) {
             
             // 显示元数据
             Json::Value metadata = node->get_file_metadata(files[i]);
+            if (metadata.isMember("PK")) {
+                std::cout << "       PK: " << metadata["PK"].asString().substr(0, 16) << "...";
+            }
             if (metadata.isMember("file_size")) {
-                std::cout << "       大小: " << metadata["file_size"].asInt() << " 字节";
+                std::cout << ", 大小: " << metadata["file_size"].asInt() << " 字节";
             }
             if (metadata.isMember("keyword_count")) {
                 std::cout << ", 关键词: " << metadata["keyword_count"].asInt();
+            }
+            if (metadata.isMember("state")) {
+                std::cout << ", 状态: " << metadata["state"].asString();
             }
             if (metadata.isMember("insert_time")) {
                 std::cout << ", 插入时间: " << metadata["insert_time"].asString();

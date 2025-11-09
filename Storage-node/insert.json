@@ -1,21 +1,26 @@
 {
-    "file_id": "2ea1416edb69dddddd1a770fd987954faa360d4439f0328b39f25242886e6522",
-    "Ts": [
-        "ts_confidential_2025",
-        ""
-    ],
+    "PK": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+    "ID_F": "file_001",
+    "ptr": "encrypted_pointer_xyz123",
+    "TS_F": "file_auth_tag_abc456",
+    "state": "valid",
     "keywords": [
-        "json",
-        "",
-        "report"
+        {
+            "T_i": "search_token_keyword1_hash",
+            "kt_i": "keyword1"
+        },
+        {
+            "T_i": "search_token_keyword2_hash",
+            "kt_i": "keyword2"
+        },
+        {
+            "T_i": "search_token_keyword3_hash",
+            "kt_i": "keyword3"
+        }
     ],
-    "pointer": "enc_ptr_a1b2c3d4e5f6g7h8i9j0",
-    "file_auth_tag": "4a4c2da0647b3ad1a22408a21c5f552af0f8847cd1e9e97d08b95b55fc1343c924897e8f3785cd502465cc815256f0ae994535bc5cd6db11aea94e75b04e190f7ca0f52273a8ff2563fc22724c45f8239777096026e299b02c02aa2bb105d11c03281f704fc31b6774ffffdeefd971f1d050e99614c5fdef7689a00ca09a7ba1",
     "metadata": {
-        "filename": "example_document.pdf",
-        "size": 102400,
-        "upload_time": "2025-11-09T10:30:00Z",
-        "description": "示例文档",
-        "tags": ["example", "demo", "test"]
+        "description": "示例文件",
+        "tags": ["加密", "测试"],
+        "original_filename": "example.txt"
     }
 }

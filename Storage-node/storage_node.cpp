@@ -101,6 +101,23 @@ std::string StorageNode::decrypt_pointer(const std::string& encrypted_pointer, c
     return result;
 }
 
+bool StorageNode::verify_pk_format(const std::string& pk) {
+    // 验证PK格式：应该是hex字符串，长度合理
+    if (pk.empty()) {
+        return false;
+    }
+    
+    // 检查是否为hex字符串
+    for (char c : pk) {
+        if (!isxdigit(c)) {
+            return false;
+        }
+    }
+    
+    // 可以添加更多验证逻辑，如长度检查
+    return true;
+}
+
 // ==================== JSON文件操作 ====================
 
 Json::Value StorageNode::load_json_from_file(const std::string& filepath) {
@@ -232,10 +249,10 @@ bool StorageNode::initialize_directories() {
 bool StorageNode::create_default_config() {
     Json::Value config;
     
-    config["version"] = "3.0";
+    config["version"] = "3.1";
     config["node"]["node_id"] = node_id;
     config["node"]["created_at"] = get_current_timestamp();
-    config["node"]["description"] = "去中心化存储节点";
+    config["node"]["description"] = "去中心化存储节点 (支持PK身份验证)";
     
     config["paths"]["data_dir"] = data_dir;
     config["paths"]["files_dir"] = files_dir;
@@ -250,6 +267,8 @@ bool StorageNode::create_default_config() {
     
     config["logging"]["enable_logging"] = true;
     config["logging"]["log_level"] = "INFO";
+    
+    config["security"]["enable_pk_verification"] = true;
     
     std::string config_path = data_dir + "/config.json";
     return save_json_to_file(config, config_path);
@@ -308,11 +327,12 @@ bool StorageNode::load_index_database() {
         
         for (const auto& entry_obj : indices[ts]) {
             IndexEntry entry;
+            entry.PK = entry_obj.get("PK", "").asString();
             entry.Ts = entry_obj["Ts"].asString();
             entry.keyword = entry_obj["keyword"].asString();
             entry.pointer = entry_obj["pointer"].asString();
             entry.file_identifier = entry_obj["file_identifier"].asString();
-            entry.valid = entry_obj["valid"].asBool();
+            entry.state = entry_obj.get("state", "valid").asString();
             entries.push_back(entry);
         }
         
@@ -325,7 +345,7 @@ bool StorageNode::load_index_database() {
 
 bool StorageNode::save_index_database() {
     Json::Value root;
-    root["version"] = "1.0";
+    root["version"] = "3.1";
     root["last_updated"] = get_current_timestamp();
     
     Json::Value indices;
@@ -338,11 +358,12 @@ bool StorageNode::save_index_database() {
         Json::Value entry_array(Json::arrayValue);
         for (const auto& entry : entries) {
             Json::Value entry_obj;
+            entry_obj["PK"] = entry.PK;
             entry_obj["Ts"] = entry.Ts;
             entry_obj["keyword"] = entry.keyword;
             entry_obj["pointer"] = entry.pointer;
             entry_obj["file_identifier"] = entry.file_identifier;
-            entry_obj["valid"] = entry.valid;
+            entry_obj["state"] = entry.state;
             entry_array.append(entry_obj);
             total++;
         }
@@ -386,7 +407,7 @@ void StorageNode::update_statistics(const std::string& operation) {
     save_node_info();
 }
 
-// ==================== 文件操作 ====================
+// ==================== 文件操作 (v3.1修改) ====================
 
 bool StorageNode::insert_file(const std::string& param_json_path, const std::string& enc_file_path) {
     std::cout << "\n📤 插入文件..." << std::endl;
@@ -402,35 +423,44 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
         return false;
     }
     
-    // 2. 读取JSON参数
+    // 2. 读取JSON参数 (新格式)
     Json::Value params = load_json_from_file(param_json_path);
     
-    if (!params.isMember("file_id") || !params.isMember("Ts") || 
-        !params.isMember("keywords") || !params.isMember("pointer") ||
-        !params.isMember("file_auth_tag")) {
+    // 3. 验证必要字段
+    if (!params.isMember("PK") || !params.isMember("ID_F") || 
+        !params.isMember("ptr") || !params.isMember("TS_F") ||
+        !params.isMember("keywords")) {
         std::cerr << "❌ JSON参数格式错误,缺少必要字段" << std::endl;
-        return false;
-    }
-    
-    // 3. 验证参数
-    const Json::Value& Ts_array = params["Ts"];
-    const Json::Value& keywords_array = params["keywords"];
-    
-    if (Ts_array.size() != keywords_array.size()) {
-        std::cerr << "❌ Ts 和 keywords 数量不匹配" << std::endl;
-        std::cerr << "   Ts: " << Ts_array.size() << ", keywords: " << keywords_array.size() << std::endl;
+        std::cerr << "   必需字段: PK, ID_F, ptr, TS_F, keywords" << std::endl;
         return false;
     }
     
     // 4. 提取数据
-    std::string file_id = params["file_id"].asString();
-    std::string pointer = params["pointer"].asString();
-    std::string file_auth_tag = params["file_auth_tag"].asString();
+    std::string PK = params["PK"].asString();
+    std::string file_id = params["ID_F"].asString();
+    std::string pointer = params["ptr"].asString();
+    std::string file_auth_tag = params["TS_F"].asString();
+    std::string state = params.get("state", "valid").asString();
+    const Json::Value& keywords = params["keywords"];
     
+    std::cout << "   客户端PK: " << PK.substr(0, 16) << "..." << std::endl;
     std::cout << "   文件ID: " << file_id << std::endl;
-    std::cout << "   关键词数: " << Ts_array.size() << std::endl;
+    std::cout << "   状态: " << state << std::endl;
+    std::cout << "   关键词数: " << keywords.size() << std::endl;
     
-    // 5. 检查文件是否已存在
+    // 5. 验证PK格式
+    if (!verify_pk_format(PK)) {
+        std::cerr << "❌ PK格式无效" << std::endl;
+        return false;
+    }
+    
+    // 6. 验证状态值
+    if (state != "valid" && state != "invalid") {
+        std::cerr << "❌ 状态值无效,必须为 'valid' 或 'invalid'" << std::endl;
+        return false;
+    }
+    
+    // 7. 检查文件是否已存在
     if (has_file(file_id)) {
         std::cerr << "⚠️  文件已存在: " << file_id << std::endl;
         char choice;
@@ -442,24 +472,30 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
         }
     }
     
-    // 6. 创建索引条目
-    for (unsigned int i = 0; i < Ts_array.size(); ++i) {
-        std::string ts = Ts_array[i].asString();
-        std::string keyword = keywords_array[i].asString();
+    // 8. 创建索引条目 (新格式: T_i, kt_i)
+    for (unsigned int i = 0; i < keywords.size(); ++i) {
+        if (!keywords[i].isMember("T_i") || !keywords[i].isMember("kt_i")) {
+            std::cerr << "❌ 关键词 " << i << " 格式错误,需要 T_i 和 kt_i" << std::endl;
+            return false;
+        }
+        
+        std::string T_i = keywords[i]["T_i"].asString();
+        std::string kt_i = keywords[i]["kt_i"].asString();
         
         IndexEntry entry;
-        entry.Ts = ts;
-        entry.keyword = keyword;
+        entry.PK = PK;
+        entry.Ts = T_i;
+        entry.keyword = kt_i;
         entry.pointer = pointer;
         entry.file_identifier = file_id;
-        entry.valid = true;
+        entry.state = state;
         
-        index_database[ts].push_back(entry);
+        index_database[T_i].push_back(entry);
         
-        std::cout << "   [" << (i+1) << "] Ts: " << ts.substr(0, 16) << "... → " << keyword << std::endl;
+        std::cout << "   [" << (i+1) << "] T_i: " << T_i.substr(0, 16) << "... → " << kt_i << std::endl;
     }
     
-    // 7. 读取加密文件内容
+    // 9. 读取加密文件内容
     std::string ciphertext = read_file_content(enc_file_path);
     if (ciphertext.empty()) {
         std::cerr << "❌ 读取加密文件失败" << std::endl;
@@ -468,34 +504,38 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     
     std::cout << "   密文大小: " << ciphertext.length() << " 字节" << std::endl;
     
-    // 8. 存储文件数据
+    // 10. 存储文件数据
     FileData file_data;
+    file_data.PK = PK;
     file_data.file_id = file_id;
     file_data.ciphertext = ciphertext;
     file_data.pointer = pointer;
     file_data.file_auth_tag = file_auth_tag;
+    file_data.state = state;
     
     file_storage[file_id] = file_data;
     
-    // 9. 保存加密文件到文件系统
+    // 11. 保存加密文件到文件系统
     if (!save_encrypted_file(file_id, enc_file_path)) {
         std::cerr << "❌ 保存加密文件失败" << std::endl;
         return false;
     }
     
-    // 10. 保存索引数据库
+    // 12. 保存索引数据库
     if (!save_index_database()) {
         std::cerr << "❌ 保存索引数据库失败" << std::endl;
         return false;
     }
     
-    // 11. 保存元数据
+    // 13. 保存元数据
     Json::Value metadata;
+    metadata["PK"] = PK;
     metadata["file_id"] = file_id;
     metadata["pointer"] = pointer;
     metadata["file_auth_tag"] = file_auth_tag;
+    metadata["state"] = state;
     metadata["insert_time"] = get_current_timestamp();
-    metadata["keyword_count"] = static_cast<int>(Ts_array.size());
+    metadata["keyword_count"] = static_cast<int>(keywords.size());
     metadata["file_size"] = static_cast<int>(ciphertext.length());
     
     if (params.isMember("metadata")) {
@@ -505,70 +545,103 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     std::string metadata_path = metadata_dir + "/" + file_id + ".json";
     save_json_to_file(metadata, metadata_path);
     
-    // 12. 更新统计
+    // 14. 更新统计
     update_statistics("insert");
     
     std::cout << "✅ 文件插入成功!" << std::endl;
-    std::cout << "   索引条目: " << Ts_array.size() << std::endl;
+    std::cout << "   索引条目: " << keywords.size() << std::endl;
     std::cout << "   总文件数: " << file_storage.size() << std::endl;
     std::cout << "   总索引数: " << get_index_count() << std::endl;
     
     return true;
 }
 
-bool StorageNode::delete_file(const std::string& file_id, const std::string& del_proof) {
+bool StorageNode::delete_file(const std::string& PK, const std::string& file_id, const std::string& del_proof) {
     std::cout << "\n🗑️  删除文件: " << file_id << std::endl;
+    std::cout << "   请求者PK: " << PK.substr(0, 16) << "..." << std::endl;
+    
+    // 验证PK格式
+    if (!verify_pk_format(PK)) {
+        std::cerr << "❌ PK格式无效" << std::endl;
+        return false;
+    }
     
     if (!has_file(file_id)) {
         std::cerr << "❌ 文件不存在" << std::endl;
         return false;
     }
     
-    // 标记索引为无效
+    // 验证文件所有权
+    const FileData& file_data = file_storage[file_id];
+    if (file_data.PK != PK) {
+        std::cerr << "❌ 权限不足: 您不是此文件的所有者" << std::endl;
+        std::cerr << "   文件所有者PK: " << file_data.PK.substr(0, 16) << "..." << std::endl;
+        return false;
+    }
+    
+    std::cout << "   ✅ 身份验证通过" << std::endl;
+    
+    // 标记索引为无效 (state = "invalid")
+    int marked_count = 0;
     for (auto& pair : index_database) {
         for (auto& entry : pair.second) {
-            if (entry.file_identifier == file_id) {
-                entry.valid = false;
+            if (entry.file_identifier == file_id && entry.PK == PK) {
+                entry.state = "invalid";
+                marked_count++;
             }
         }
     }
     
-    // 删除文件数据
+    std::cout << "   标记 " << marked_count << " 条索引为无效" << std::endl;
+    
+    // 更新文件状态
+    file_storage[file_id].state = "invalid";
+    
+    // 可选：物理删除文件 (注释掉以保留文件)
+    /*
     file_storage.erase(file_id);
     
-    // 删除加密文件
     std::string enc_file_path = files_dir + "/" + file_id + ".enc";
     if (file_exists(enc_file_path)) {
         remove(enc_file_path.c_str());
     }
     
-    // 删除元数据
     std::string metadata_path = metadata_dir + "/" + file_id + ".json";
     if (file_exists(metadata_path)) {
         remove(metadata_path.c_str());
     }
+    */
     
-    // 保存更新
+    // 保存更新 (修复拼写错误)
     save_index_database();
     update_statistics("delete");
     
-    std::cout << "✅ 文件删除成功" << std::endl;
+    std::cout << "✅ 文件删除成功 (已标记为无效)" << std::endl;
     return true;
 }
 
-SearchResult StorageNode::search_keyword(const std::string& search_token, 
+SearchResult StorageNode::search_keyword(const std::string& PK,
+                                        const std::string& search_token, 
                                         const std::string& latest_state,
                                         const std::string& seed) {
     SearchResult result;
     
     std::cout << "\n🔍 搜索关键词..." << std::endl;
+    std::cout << "   请求者PK: " << PK.substr(0, 16) << "..." << std::endl;
     std::cout << "   搜索令牌: " << search_token.substr(0, 16) << "..." << std::endl;
+    
+    // 验证PK格式
+    if (!verify_pk_format(PK)) {
+        std::cerr << "❌ PK格式无效" << std::endl;
+        return result;
+    }
     
     // 在索引数据库中查找
     auto it = index_database.find(search_token);
     if (it != index_database.end()) {
         for (const auto& entry : it->second) {
-            if (entry.valid) {
+            // 只返回该PK的文件且状态为valid的条目
+            if (entry.PK == PK && entry.state == "valid") {
                 result.file_identifiers.push_back(entry.file_identifier);
                 result.keyword_proofs.push_back(entry.keyword);
             }
@@ -607,10 +680,12 @@ Json::Value StorageNode::retrieve_file(const std::string& file_id) {
     const FileData& data = file_storage[file_id];
     
     result["success"] = true;
+    result["PK"] = data.PK;
     result["file_id"] = file_id;
     result["ciphertext"] = data.ciphertext;
     result["pointer"] = data.pointer;
     result["file_auth_tag"] = data.file_auth_tag;
+    result["state"] = data.state;
     
     return result;
 }
@@ -682,6 +757,18 @@ std::vector<std::string> StorageNode::list_all_files() {
     return file_list;
 }
 
+std::vector<std::string> StorageNode::list_files_by_pk(const std::string& PK) {
+    std::vector<std::string> file_list;
+    
+    for (const auto& pair : file_storage) {
+        if (pair.second.PK == PK) {
+            file_list.push_back(pair.first);
+        }
+    }
+    
+    return file_list;
+}
+
 // ==================== 详细状态 ====================
 
 void StorageNode::print_detailed_status() {
@@ -693,10 +780,24 @@ void StorageNode::print_detailed_status() {
     std::cout << "   节点 ID:      " << node_id << std::endl;
     std::cout << "   数据目录:     " << data_dir << std::endl;
     std::cout << "   端口:         " << server_port << std::endl;
+    std::cout << "   版本:         v3.1 (支持PK身份验证)" << std::endl;
     
     std::cout << "\n📦 存储统计:" << std::endl;
     std::cout << "   文件总数:     " << file_storage.size() << std::endl;
     std::cout << "   索引总数:     " << get_index_count() << std::endl;
+    
+    // 统计各状态文件数
+    int valid_count = 0;
+    int invalid_count = 0;
+    for (const auto& pair : file_storage) {
+        if (pair.second.state == "valid") {
+            valid_count++;
+        } else {
+            invalid_count++;
+        }
+    }
+    std::cout << "   有效文件:     " << valid_count << std::endl;
+    std::cout << "   无效文件:     " << invalid_count << std::endl;
     
     std::cout << "\n🔐 密码学状态:" << std::endl;
     std::cout << "   初始化:       " << (crypto_initialized ? "✅ 是" : "❌ 否") << std::endl;
@@ -707,7 +808,9 @@ void StorageNode::print_detailed_status() {
         for (const auto& pair : file_storage) {
             count++;
             std::cout << "   [" << count << "] " << pair.first 
-                     << " (" << pair.second.ciphertext.length() << " 字节)" << std::endl;
+                     << " (" << pair.second.ciphertext.length() << " 字节, "
+                     << "PK: " << pair.second.PK.substr(0, 8) << "..., "
+                     << "状态: " << pair.second.state << ")" << std::endl;
             if (count >= 10) {
                 std::cout << "   ... (还有 " << (file_storage.size() - 10) << " 个文件)" << std::endl;
                 break;
