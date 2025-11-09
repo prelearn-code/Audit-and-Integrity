@@ -6,19 +6,17 @@
 
 void printUsage() {
     std::cout << "\n=========================================" << std::endl;
-    std::cout << "  本地加密存储工具 v3.2" << std::endl;
+    std::cout << "  本地加密存储工具 v3.3" << std::endl;
     std::cout << "=========================================" << std::endl;
     std::cout << "\n🔧 系统设置:" << std::endl;
     std::cout << "  1.  init           - 初始化加密系统（从JSON加载参数）" << std::endl;
-    std::cout << "  2.  keygen         - 生成密钥" << std::endl;
+    std::cout << "  2.  keygen         - 生成密钥（需要 public_params.json）" << std::endl;
     std::cout << "  3.  save-keys      - 保存密钥到文件" << std::endl;
     std::cout << "  4.  load-keys      - 从文件加载密钥" << std::endl;
     std::cout << "\n📁 文件操作:" << std::endl;
-    std::cout << "  5.  encrypt        - 加密文件（生成.enc + .json）" << std::endl;
+    std::cout << "  5.  encrypt        - 加密文件（生成 .enc, insert.json, metadata.json）" << std::endl;
     std::cout << "  6.  decrypt        - 解密文件" << std::endl;
-    std::cout << "\n🔍 搜索功能:" << std::endl;
-    std::cout << "  7.  search-token   - 生成搜索令牌" << std::endl;
-    std::cout << "\n📊 状态管理: ⭐ 新增功能" << std::endl;
+    std::cout << "\n📊 状态管理:" << std::endl;
     std::cout << "  10. load-states    - 加载关键词状态文件" << std::endl;
     std::cout << "  11. save-states    - 保存关键词状态文件" << std::endl;
     std::cout << "  12. query-state    - 查询关键词当前状态" << std::endl;
@@ -30,9 +28,9 @@ void printUsage() {
 
 void printBanner() {
     std::cout << "==================================================" << std::endl;
-    std::cout << "  🔐 本地加密存储工具 - v3.2" << std::endl;
-    std::cout << "  可验证的可搜索加密系统（支持JSON配置）" << std::endl;
-    std::cout << "  ⭐ 新增: 关键词状态管理功能" << std::endl;
+    std::cout << "  🔐 本地加密存储工具 - v3.3" << std::endl;
+    std::cout << "  可验证的可搜索加密系统" << std::endl;
+    std::cout << "  ⭐ v3.3 新特性: 符合 Storage Node 接口规范" << std::endl;
     std::cout << "==================================================" << std::endl;
 }
 
@@ -51,6 +49,17 @@ int main() {
         std::cout << "\n✅ 检测到系统参数配置文件\n" << std::endl;
     }
     config_check.close();
+    
+    // 检查公共参数文件（用于密钥生成）
+    std::ifstream pub_params_check("public_params.json");
+    if (!pub_params_check.good()) {
+        std::cout << "⚠️  警告: 未找到 public_params.json 文件" << std::endl;
+        std::cout << "   此文件由 Storage Node 生成，用于生成密钥" << std::endl;
+        std::cout << "   如需生成密钥，请先从 Storage Node 获取此文件\n" << std::endl;
+    } else {
+        std::cout << "✅ 检测到公共参数文件（可以生成密钥）\n" << std::endl;
+    }
+    pub_params_check.close();
     
     printUsage();
     
@@ -76,11 +85,25 @@ int main() {
             }
             else if (command == "keygen" || command == "2") {
                 std::cout << "\n🔑 生成密钥..." << std::endl;
-                if (client.generateKeys()) {
+                std::cout << "📄 从 public_params.json 读取公共参数..." << std::endl;
+                
+                std::string pub_params_file;
+                std::cout << "💡 输入公共参数文件路径（按回车使用默认: public_params.json）: ";
+                std::cin.ignore();
+                std::getline(std::cin, pub_params_file);
+                
+                if (pub_params_file.empty()) {
+                    pub_params_file = "public_params.json";
+                }
+                
+                if (client.generateKeys(pub_params_file)) {
                     std::cout << "✅ 密钥生成成功" << std::endl;
-                    std::cout << "📌 公钥: " << client.getPublicKey().substr(0, 32) << "..." << std::endl;
+                    std::cout << "📌 公钥已保存到: public_key.json" << std::endl;
+                    std::cout << "🔐 私钥已保存到: private_key.dat" << std::endl;
+                    std::cout << "⚠️  请妥善保管私钥文件！" << std::endl;
                 } else {
                     std::cerr << "❌ 密钥生成失败" << std::endl;
+                    std::cerr << "💡 请确保 " << pub_params_file << " 存在且格式正确" << std::endl;
                 }
             }
             else if (command == "save-keys" || command == "3") {
@@ -133,12 +156,22 @@ int main() {
                 }
                 
                 std::string output_prefix;
-                std::cout << "💾 输出文件前缀（将生成 .enc 和 .json）: ";
+                std::cout << "💾 输出文件前缀（将生成 .enc 和相关 JSON）: ";
                 std::cin >> output_prefix;
                 
+                std::string insert_json_path;
+                std::cout << "💾 insert.json 输出路径（按回车使用默认: insert.json）: ";
+                std::cin.ignore();
+                std::getline(std::cin, insert_json_path);
+                
+                if (insert_json_path.empty()) {
+                    insert_json_path = "insert.json";
+                }
+                
                 std::cout << "\n🔐 加密中..." << std::endl;
-                if (client.encryptFile(file_path, keywords, output_prefix)) {
-                    std::cout << "\n🎉 加密完成！" << std::endl;
+                if (client.encryptFile(file_path, keywords, output_prefix, insert_json_path)) {
+                    std::cout << "\n✅ 加密完成！" << std::endl;
+                    std::cout << "💡 可以将 " << insert_json_path << " 发送给 Storage Node" << std::endl;
                 } else {
                     std::cerr << "❌ 文件加密失败" << std::endl;
                 }
@@ -159,22 +192,7 @@ int main() {
                     std::cerr << "❌ 文件解密失败" << std::endl;
                 }
             }
-            else if (command == "search-token" || command == "7") {
-                std::string keyword;
-                std::cout << "\n🔍 输入关键词: ";
-                std::cin >> keyword;
-                
-                std::string output_file;
-                std::cout << "💾 输出JSON文件路径: ";
-                std::cin >> output_file;
-                
-                if (client.generateSearchToken(keyword, output_file)) {
-                    std::cout << "✅ 搜索令牌生成成功！" << std::endl;
-                } else {
-                    std::cerr << "❌ 搜索令牌生成失败" << std::endl;
-                }
-            }
-            // ============ 新增命令 ============
+            // ============ 状态管理命令 ============
             else if (command == "load-states" || command == "10") {
                 std::string state_file;
                 std::cout << "\n📂 输入状态文件路径: ";

@@ -6,6 +6,39 @@
 
 public_params.json公共参数
 
+```json
+{
+  "version": "1.0",
+  "created_at": "2024-11-09T10:30:00Z",
+  "description": "Public Parameters for Decentralized Storage System",
+  "public_params": {
+    "p": "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791",
+    "q": "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791",
+    "G_1": {
+      "type": "G1 (Elliptic Curve Group)",
+      "order": "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791",
+      "description": "Additive group on elliptic curve",
+      "generator_g_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40"
+    },
+    "G_2": {
+      "type": "G_T (Target Group)",
+      "order": "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791",
+      "description": "Multiplicative target group for pairing"
+    },
+    "e": {
+      "type": "Bilinear Pairing",
+      "mapping": "e: G_1 × G_1 → G_2",
+      "properties": [
+        "bilinearity",
+        "non-degeneracy",
+        "computability"
+      ],
+      "pairing_type": "type_a (symmetric)"
+    }
+  }
+}
+```
+
 以公共参数作为输入，生成客户端本地自己的密钥相关参数。
 
 ### 输出
@@ -36,30 +69,25 @@ public_params.json公共参数
 
 ```json
 {
-    "PK": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
-    "ID_F": "file_001",
-    "ptr": "encrypted_pointer_xyz123",
-    "TS_F": "file_auth_tag_abc456",
-    "state": "valid",
-    "keywords": [
-        {
-            "T_i": "search_token_keyword1_hash",
-            "kt_i": "keyword1"
-        },
-        {
-            "T_i": "search_token_keyword2_hash",
-            "kt_i": "keyword2"
-        },
-        {
-            "T_i": "search_token_keyword3_hash",
-            "kt_i": "keyword3"
-        }
-    ],
-    "metadata": {
-        "description": "示例文件",
-        "tags": ["加密", "测试"],
-        "original_filename": "example.txt"
+  "PK": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "ID_F": "file_001",
+  "ptr": "pointer_to_file_001",
+  "TS_F": "authentication_tag_for_file_001",
+  "state": "valid",
+  "keywords": [
+    {
+      "T_i": "search_token_001",
+      "kt_i": "encrypted_keyword_1"
+    },
+    {
+      "T_i": "search_token_002",
+      "kt_i": "encrypted_keyword_2"
+    },
+    {
+      "T_i": "search_token_003",
+      "kt_i": "encrypted_keyword_3"
     }
+  ]
 }
 ```
 
@@ -148,3 +176,9 @@ $$
 $$
 kt^{w_i} = [H_2(ID_F)*H_2(st_d||T_i]^{sk}
 $$
+
+
+
+
+
+111

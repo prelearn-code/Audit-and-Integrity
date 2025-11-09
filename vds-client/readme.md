@@ -1,6 +1,742 @@
 # 本地加密存储工具 v3.1
 
-> 基于可搜索加密的本地文件加密工具，支持前向安全性和可验证性  
+# 本地加密存储工具 v3.3
+
+> 基于可搜索加密的本地文件加密工具，支持前向安全性和可验证性
+> **v3.3 新特性：完全符合 Storage Node 接口规范**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)[![C++](https://img.shields.io/badge/C++-14-blue.svg)](https://isocpp.org/)[![Version](https://img.shields.io/badge/version-3.3-green.svg)](https://github.com/your-repo)
+
+---
+
+## 📖 简介
+
+本工具是一个**纯本地运行**的文件加密工具，使用军事级加密算法（AES-256-CBC）和可搜索加密技术，完全符合分布式存储节点（Storage Node）的接口规范。
+
+**核心特性：**
+
+* ✅ 完全本地运行，无需网络
+* ✅ 不依赖区块链或外部服务
+* ✅ 军事级加密（AES-256）
+* ✅ 可搜索加密（无需解密即可搜索）
+* ✅ 前向安全性（新文件不泄露旧搜索模式）
+* ✅ 符合 Storage Node 接口规范
+* ✅ 生成标准化的 insert.json 文件
+* ✅ 算法完全按照论文实现
+
+---
+
+## 🆕 v3.3 版本重大更新
+
+### 主要变更
+
+#### 1. **密钥生成（generateKeys）**
+
+* ✨ 从 Storage Node 提供的 `public_params.json` 读取公共参数
+* ✨ 生成两个文件：
+  * `private_key.dat`（二进制格式，包含 mk, ek, sk）
+  * `public_key.json`（JSON格式，包含 PK 和客户端信息）
+
+#### 2. **文件加密（encryptFile）**
+
+* ✨ 生成三个文件：
+  * `[prefix].enc` - 加密文件
+  * `insert.json` - 供 Storage Node 使用的标准化插入数据
+  * `[filename]_metadata.json` - 本地元数据
+* ✨ `insert.json` 完全符合 Storage Node 接口规范
+
+#### 3. **认证标签生成（generateAuthTags）**
+
+* 🔧 算法完全重写，严格按照论文实现
+* 📐 公式：`σ_i = [H_2(ID_F||i) * ∏_{j=1}^s μ^{c_{i,j}}]^sk`
+* ✅ 支持分块验证
+
+#### 4. **状态关联令牌（generateStateAssociatedToken）**
+
+* 🔧 从 `generateKeywordTag` 改名
+* 🔧 算法修正：
+  * 有前一状态：`kt^{w_i} = [H_2(ID_F) * H_2(st_d||Ti) / H_2(st_{d-1}||Ti)]^{sk}`
+  * 无前一状态：`kt^{w_i} = [H_2(ID_F) * H_2(st_d||Ti)]^{sk}`
+
+#### 5. **搜索令牌生成**
+
+* ❌ 删除了 `generateSearchToken` 命令（功能已整合）
+* ✅ 现在自动在加密时生成搜索令牌
+
+#### 6. **指针加密（encryptPointer）**
+
+* 🔧 调整逻辑：使用当前状态哈希作为密钥加密前一状态
+
+---
+
+## 📋 v3.3 与 v3.2 的区别
+
+
+| 特性         | v3.2                   | v3.3                                       |
+| ------------ | ---------------------- | ------------------------------------------ |
+| 密钥生成     | 从 system\_params.json | 从 public\_params.json（Storage Node提供） |
+| 公钥存储     | 不保存单独文件         | 生成 public\_key.json                      |
+| 加密输出     | .enc + .json           | .enc + insert.json + metadata.json         |
+| insert.json  | 不生成                 | ✅ 生成（符合Storage Node规范）            |
+| 认证标签算法 | 简化版本               | ✅ 完全按论文实现                          |
+| 状态关联令牌 | generateKeywordTag     | generateStateAssociatedToken（算法修正）   |
+| 搜索令牌命令 | 独立命令               | 已删除（自动生成）                         |
+| 接口兼容性   | 部分兼容               | ✅ 完全兼容 Storage Node                   |
+
+---
+
+## 🔧 安装依赖
+
+### Ubuntu/Debian
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential cmake
+sudo apt-get install -y libssl-dev libgmp-dev libjsoncpp-dev libpbc-dev
+```
+
+### CentOS/RHEL
+
+```bash
+sudo yum install -y gcc-c++ cmake
+sudo yum install -y openssl-devel gmp-devel jsoncpp-devel pbc-devel
+```
+
+---
+
+## 🏗️ 编译
+
+```bash
+# 创建构建目录
+mkdir build && cd build
+
+# 配置
+cmake ..
+
+# 编译
+make -j4
+
+# 查看可执行文件
+ls -lh storage_client
+```
+
+---
+
+## 🚀 快速开始
+
+### 准备工作
+
+**重要：v3.3 需要两个配置文件！**
+
+1. **system\_params.json** - 系统参数（本地配置）
+2. **public\_params.json** - 公共参数（由 Storage Node 生成）
+
+```bash
+# 检查配置文件
+ls -l system_params.json public_params.json
+
+# 如果不存在，请从相应来源获取
+```
+
+### 第一步：初始化系统
+
+```bash
+./storage_client
+```
+
+程序会自动检测配置文件并显示状态：
+
+```
+==================================================
+  🔐 本地加密存储工具 - v3.3
+  可验证的可搜索加密系统
+  ⭐ v3.3 新特性: 符合 Storage Node 接口规范
+==================================================
+
+✅ 检测到系统参数配置文件
+✅ 检测到公共参数文件（可以生成密钥）
+
+...
+```
+
+运行初始化命令：
+
+```
+💻 > init
+
+⚙️  初始化加密系统...
+📄 使用配置文件: system_params.json
+💡 提示: 请确保配置文件在程序同目录下
+
+初始化客户端...
+从配置文件加载系统参数...
+✅ 系统参数加载成功
+   配对类型: a
+   安全级别: 512-bit
+✅ 客户端初始化成功
+```
+
+### 第二步：生成密钥
+
+```
+💻 > keygen
+
+🔑 生成密钥...
+📄 从 public_params.json 读取公共参数...
+💡 输入公共参数文件路径（按回车使用默认: public_params.json）: [回车]
+
+生成客户端密钥...
+从 public_params.json 读取公共参数...
+✅ 从公共参数加载生成元 g
+✅ 密钥生成成功
+✅ 私钥已保存到: private_key.dat
+✅ 公钥已保存到: public_key.json
+📌 客户端ID: a1b2c3d4e5f6g7h8
+⚠️  请妥善保管私钥文件！
+```
+
+**生成的文件：**
+
+* `private_key.dat` - 私钥（二进制，包含 mk, ek, sk）
+* `public_key.json` - 公钥和客户端信息（JSON格式）
+
+---
+
+## 📚 完整使用教程
+
+### 1. 加密文件（v3.3 新流程）
+
+```
+💻 > encrypt
+
+📄 输入文件路径: documents/report.pdf
+🏷️  输入关键词（逗号分隔）: confidential, finance, Q4-2024
+💾 输出文件前缀（将生成 .enc 和相关 JSON）: encrypted_report
+💾 insert.json 输出路径（按回车使用默认: insert.json）: [回车]
+
+🔐 加密中...
+加密文件: documents/report.pdf
+文件大小: 524288 字节
+文件ID: a3f5e8d2b1c7a4f9e2d8c3b6a1f5e9d2...
+生成了 128 个认证标签
+生成了 3 个关键词标签
+✅ insert.json 已生成: insert.json
+✅ 本地元数据已生成: report.pdf_metadata.json
+
+🎉 文件加密完成！
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📦 加密文件: encrypted_report.enc
+📋 插入数据: insert.json
+📄 本地元数据: report.pdf_metadata.json
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 可以将 insert.json 发送给 Storage Node
+```
+
+**生成的文件说明：**
+
+1. **encrypted\_report.enc** - 加密后的文件
+   * 格式：`[16字节 IV][AES-256-CBC 加密数据]`
+2. **insert.json** - 供 Storage Node 使用（标准格式）
+   ```json
+   {
+     "PK": "客户端公钥",
+     "ID_F": "文件ID（SHA256哈希）",
+     "ptr": "指针数据",
+     "TS_F": ["认证标签数组"],
+     "state": "valid",
+     "keywords": [
+       {
+         "T_i": "搜索令牌 Ti",
+         "kt_i": "关键词标签 kt^wi"
+       }
+     ]
+   }
+   ```
+3. **report.pdf\_metadata.json** - 本地元数据
+   ```json
+   {
+     "original_filename": "report.pdf",
+     "encrypted_filename": "encrypted_report.enc",
+     "file_id": "a3f5e8...",
+     "file_size": 524288,
+     "encryption_time": "2025-11-09T10:30:00Z",
+     "keywords": ["confidential", "finance", "Q4-2024"],
+     "states": {
+       "confidential": {
+         "current_state": "当前状态值",
+         "previous_state": "前一状态值"
+       }
+     }
+   }
+   ```
+
+### 2. 解密文件
+
+```
+💻 > decrypt
+
+📥 输入加密文件路径: encrypted_report.enc
+💾 输出文件路径: decrypted_report.pdf
+
+🔓 解密中...
+解密文件: encrypted_report.enc
+✅ 文件解密成功
+保存到: decrypted_report.pdf
+```
+
+### 3. 关键词状态管理
+
+#### 加载状态文件
+
+```
+💻 > load-states
+
+📂 输入状态文件路径: keyword_states.json
+
+📥 加载关键词状态...
+✅ 已加载 5 个关键词状态
+💡 提示: 加密文件时会自动更新此状态文件
+```
+
+#### 查询关键词状态
+
+```
+💻 > query-state
+
+🔍 输入要查询的关键词: confidential
+
+🔍 关键词状态查询结果
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+关键词: confidential
+当前状态: 8a7f3e2d...
+
+📜 历史记录 (3 条):
+  1. [当前] 文件ID: a3f5e8d2b1c7a4f9...
+     时间: 2025-11-09T10:30:00Z
+  2. 文件ID: b4f6e9d3c2b8a5f0...
+     时间: 2025-11-08T15:20:00Z
+  3. 文件ID: c5f7e0d4c3b9a6f1...
+     时间: 2025-11-07T12:10:00Z
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+## 📋 命令参考
+
+
+| 命令                   | 快捷键    | 功能                 | v3.3 变更                   |
+| ---------------------- | --------- | -------------------- | --------------------------- |
+| `init`                 | 1         | 初始化加密系统       | 不变                        |
+| `keygen`               | 2         | 生成新的加密密钥     | ✨ 需要 public\_params.json |
+| `save-keys`            | 3         | 保存密钥到文件       | 不变                        |
+| `load-keys`            | 4         | 从文件加载密钥       | 不变                        |
+| `encrypt`              | 5         | 加密文件并生成元数据 | ✨ 生成 insert.json         |
+| `decrypt`              | 6         | 解密文件             | 不变                        |
+| \~\~`search-token`\~\~ | \~\~7\~\~ | \~\~生成搜索令牌\~\~ | ❌ 已删除                   |
+| `load-states`          | 10        | 加载关键词状态文件   | 不变                        |
+| `save-states`          | 11        | 保存关键词状态文件   | 不变                        |
+| `query-state`          | 12        | 查询关键词当前状态   | 不变                        |
+| `help`                 | 13        | 显示帮助信息         | 不变                        |
+| `quit`                 | 14        | 退出程序             | 不变                        |
+
+---
+
+## 📄 文件格式说明
+
+### 1. public\_params.json（由 Storage Node 生成）
+
+```json
+{
+  "version": "1.0",
+  "created_at": "2025-11-09T10:00:00Z",
+  "G_1": {
+    "generator_g_hex": "生成元g的十六进制字符串",
+    "description": "G1 group generator"
+  },
+  "node_info": {
+    "node_id": "storage_node_001",
+    "location": "datacenter-1"
+  }
+}
+```
+
+### 2. public\_key.json（由客户端生成）
+
+```json
+{
+  "version": "1.0",
+  "created_at": "2025-11-09T10:30:00Z",
+  "PK": "公钥的十六进制字符串",
+  "node_info": {
+    "client_id": "a1b2c3d4e5f6g7h8",
+    "key_generated_at": "2025-11-09T10:30:00Z"
+  }
+}
+```
+
+### 3. insert.json（供 Storage Node 使用）
+
+```json
+{
+  "PK": "客户端公钥（从 public_key.json 读取）",
+  "ID_F": "文件ID（SHA256哈希，64字符十六进制）",
+  "ptr": "指针数据（如需要）",
+  "TS_F": [
+    "认证标签1（十六进制字符串）",
+    "认证标签2",
+    "..."
+  ],
+  "state": "valid",
+  "keywords": [
+    {
+      "T_i": "搜索令牌 Ti（64字符十六进制）",
+      "kt_i": "关键词标签 kt^wi（十六进制字符串）"
+    }
+  ]
+}
+```
+
+### 4. [filename]\_metadata.json（本地元数据）
+
+```json
+{
+  "original_filename": "report.pdf",
+  "encrypted_filename": "encrypted_report.enc",
+  "file_id": "a3f5e8d2...",
+  "file_size": 524288,
+  "encryption_time": "2025-11-09T10:30:00Z",
+  "keywords": ["confidential", "finance"],
+  "states": {
+    "confidential": {
+      "current_state": "8a7f3e2d...",
+      "previous_state": "7a6f2e1c..."
+    }
+  }
+}
+```
+
+### 5. keyword\_states.json（关键词状态文件）
+
+```json
+{
+  "version": "1.0",
+  "last_updated": "2025-11-09T14:30:00Z",
+  "keywords": {
+    "confidential": {
+      "current_state": "8a7f3e2d...",
+      "history": [
+        {
+          "state": "8a7f3e2d...",
+          "file_id": "a3f5e8d2...",
+          "timestamp": "2025-11-09T10:30:00Z",
+          "is_current": true
+        }
+      ]
+    }
+  }
+}
+```
+
+---
+
+## 🔐 安全性说明
+
+### 加密算法
+
+
+| 组件       | 算法              | 安全级别 |
+| ---------- | ----------------- | -------- |
+| 文件加密   | AES-256-CBC       | 256位    |
+| 关键词加密 | AES-256-CBC       | 256位    |
+| 认证标签   | 配对密码学（PBC） | 512位    |
+| 哈希函数   | SHA-256           | 256位    |
+
+### v3.3 算法正确性
+
+* ✅ 认证标签生成完全按照论文公式实现
+* ✅ 状态关联令牌算法修正
+* ✅ 支持前向安全的可搜索加密
+* ✅ 所有输出符合 Storage Node 接口规范
+
+### 密钥管理建议
+
+**DO（推荐）：**
+
+* ✅ 立即备份 `private_key.dat` 到多个安全位置
+* ✅ 妥善保管 `public_key.json`（需要发送给 Storage Node）
+* ✅ 使用强密码加密存储密钥文件
+* ✅ 定期测试密钥备份是否可用
+* ✅ 将密钥存储在离线设备（U盘、硬盘）
+* ✅ 备份 `system_params.json` 和 `public_params.json`
+
+**DON'T（禁止）：**
+
+* ❌ 不要将私钥文件存储在云端（除非加密）
+* ❌ 不要通过邮件/聊天软件发送私钥
+* ❌ 不要在公共电脑上生成或使用密钥
+* ❌ 不要忘记备份密钥
+* ❌ 不要随意修改配置文件参数
+
+---
+
+## 🔬 技术细节
+
+### v3.3 算法实现
+
+#### 1. 认证标签生成
+
+```
+对于每个 block i (共 n 个 blocks):
+    1. 计算 H_2(ID_F||i)
+    2. 将 block 分为 s 个 sectors
+    3. 对于每个 sector j:
+        - 获取密文块 c_{i,j}
+        - 计算 μ^{c_{i,j}}
+    4. 累乘所有 sectors 的结果: ∏_{j=1}^s μ^{c_{i,j}}
+    5. 与 H_2(ID_F||i) 相乘
+    6. 用 sk 签名: σ_i = [结果]^sk
+```
+
+#### 2. 状态关联令牌生成
+
+**有前一状态的情况：**
+
+```
+kt^{w_i} = [H_2(ID_F) * H_2(st_d||Ti) / H_2(st_{d-1}||Ti)]^{sk}
+```
+
+**第一个文件（无前一状态）：**
+
+```
+kt^{w_i} = [H_2(ID_F) * H_2(st_d||Ti)]^{sk}
+```
+
+#### 3. 搜索令牌生成
+
+```
+Ti = H_3(H_1(mk || keyword))
+```
+
+### 核心组件
+
+1. **配对密码系统**
+   * 使用 PBC 库
+   * Type A 曲线
+   * 可配置参数
+   * 512位安全性（默认）
+2. **哈希函数**
+   * H1: 字符串 → Zp
+   * H2: 字符串 → G1
+   * H3: 字符串 → 字符串（SHA-256）
+3. **关键词状态链**
+   * 每个关键词维护一个状态
+   * 状态通过指针连接（前向安全）
+   * 支持高效的关键词搜索
+
+---
+
+## 🛠️ 常见问题
+
+### Q1：丢失私钥文件怎么办？
+
+**A：无法恢复！** 密钥丢失后，所有加密文件将永久无法解密。请务必做好备份。
+
+### Q2：如何获取 public\_params.json？
+
+**A：** 此文件由 Storage Node 生成并提供。请联系您的 Storage Node 管理员获取。
+
+### Q3：insert.json 是做什么用的？
+
+**A：** 这是发送给 Storage Node 的标准化数据文件，包含文件ID、认证标签、关键词标签等信息，Storage Node 会使用这些信息进行存储和验证。
+
+### Q4：为什么删除了 search-token 命令？
+
+**A：** 搜索令牌现在在加密文件时自动生成并包含在 insert.json 中，不需要单独生成。
+
+### Q5：v3.3 的算法与之前版本有什么不同？
+
+**A：** v3.3 完全按照论文实现了认证标签和状态关联令牌的算法，修正了之前版本的简化实现，确保了算法的正确性和安全性。
+
+### Q6：可以用旧版本的密钥吗？
+
+**A：** 不建议。v3.3 的密钥生成方式有所变化，建议重新生成密钥。
+
+### Q7：元数据文件（.json）可以公开吗？
+
+**A：不建议。** 虽然元数据不包含文件内容，但包含关键词标签信息，可能泄露隐私。
+
+---
+
+## 📊 性能参数
+
+
+| 项目         | 参数                         |
+| ------------ | ---------------------------- |
+| 块大小       | 4096 字节                    |
+| 扇区大小     | 256 字节                     |
+| 每块扇区数   | 16 个                        |
+| 最大文件大小 | 理论无限制（受存储空间限制） |
+| 加密速度     | \~50 MB/s（取决于CPU性能）   |
+| 解密速度     | \~50 MB/s（取决于CPU性能）   |
+| 配置加载时间 | <100ms                       |
+
+---
+
+## 📂 项目文件结构
+
+```
+project/
+├── client.h                 # 客户端头文件（v3.3修改）
+├── client.cpp               # 客户端实现（v3.3大幅修改）
+├── main.cpp                 # 主程序（v3.3修改）
+├── system_params.json       # 系统参数配置
+├── public_params.json       # 公共参数（Storage Node提供）⭐ 新增
+├── CMakeLists.txt           # CMake配置
+└── README.md                # 本文件（v3.3更新）
+```
+
+**运行时生成的文件：**
+
+```
+├── private_key.dat          # 私钥文件（二进制）⭐ 新增
+├── public_key.json          # 公钥文件（JSON）⭐ 新增
+├── keyword_states.json      # 关键词状态文件（可选）
+├── [prefix].enc             # 加密文件
+├── insert.json              # Storage Node插入数据 ⭐ 新增
+└── [filename]_metadata.json # 本地元数据 ⭐ 新增
+```
+
+---
+
+## 🔄 从 v3.2 升级到 v3.3
+
+### 迁移步骤
+
+1. **备份旧版本数据**
+   ```bash
+   cp my_keys.dat my_keys_v32.dat.backup
+   cp keyword_states.json keyword_states_v32.json.backup
+   ```
+2. **获取 public\_params.json**
+   * 从 Storage Node 获取此文件
+   * 放在程序同目录下
+3. **重新生成密钥**
+   ```bash
+   ./storage_client
+   > init
+   > keygen
+   ```
+4. **重新加密文件**
+   * 旧版本加密的文件可以用旧密钥解密
+   * 新文件请使用新密钥加密
+
+### 不兼容性说明
+
+* ❌ 密钥文件格式不兼容（需要重新生成）
+* ✅ 关键词状态文件格式兼容
+* ✅ system\_params.json 格式兼容
+
+---
+
+## 🤝 贡献
+
+欢迎贡献代码！请遵循以下步骤：
+
+1. Fork 本仓库
+2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 打开 Pull Request
+
+---
+
+## 📜 许可证
+
+本项目采用 MIT 许可证 - 详见 [LICENSE](https://78991718.4omini.xyz/chat/LICENSE) 文件
+
+---
+
+## 🙏 致谢
+
+本项目基于以下研究论文：
+
+**"Enabling Verifiable Search and Integrity Auditing in Encrypted Decentralized Storage Using One Proof"**
+作者：Mingyang Song, Zhongyun Hua, et al.
+
+使用的开源库：
+
+* [PBC Library](https://crypto.stanford.edu/pbc/) - 配对密码学
+* [OpenSSL](https://www.openssl.org/) - 加密算法
+* [GMP](https://gmplib.org/) - 大数运算
+* [JsonCpp](https://github.com/open-source-parsers/jsoncpp) - JSON解析
+
+---
+
+## 📞 支持
+
+* 📧 Email: support@example.com
+* 🐛 Issues: [GitHub Issues](https://github.com/your-repo/issues)
+* 📖 文档: [完整文档](https://docs.example.com/)
+
+---
+
+## 📋 更新日志
+
+### v3.3.0 (2025-11-09)
+
+* ✨ 重大更新：完全符合 Storage Node 接口规范
+* ✨ 新增：从 public\_params.json 生成密钥
+* ✨ 新增：生成 public\_key.json 和 private\_key.dat
+* ✨ 新增：生成标准化的 insert.json
+* ✨ 新增：生成本地元数据 JSON
+* 🔧 重写：generateAuthTags() 算法（严格按论文实现）
+* 🔧 修正：generateStateAssociatedToken() 算法
+* 🔧 简化：encryptKeyword() 函数
+* 🔧 调整：encryptPointer() 逻辑
+* ❌ 删除：generateSearchToken() 命令（功能已整合）
+* 📖 更新：完整的文档和使用说明
+
+### v3.2.0 (2025-11-09)
+
+* ✨ 新增：关键词状态管理功能
+* ✨ 新增：load-states, save-states, query-state 命令
+* 🔧 改进：状态文件独立管理
+
+### v3.1.0 (2025-11-08)
+
+* ✨ 新增：JSON配置文件支持
+* 🔧 改进：系统参数可配置化
+
+### v3.0.0 (2025-11-01)
+
+* 🎉 初始版本发布
+
+---
+
+## ⚠️ 免责声明
+
+本工具仅供学习和研究使用。作者不对使用本工具造成的任何数据丢失或安全问题负责。请务必：
+
+1. 在重要文件加密前先备份
+2. 妥善保管密钥文件和配置文件
+3. 在生产环境使用前充分测试
+4. 遵守当地法律法规
+5. 确保从可信来源获取 public\_params.json
+
+---
+
+**版本**: 3.3.0
+**最后更新**: 2025年11月09日
+**状态**: 生产就绪 ✅
+**Storage Node 兼容**: 完全兼容 ✅
+
+---
+
+**Stay Secure! 🔐**
+
+> 基于可搜索加密的本地文件加密工具，支持前向安全性和可验证性
 > **新版本特性：支持JSON配置文件导入系统参数**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -19,6 +755,7 @@
 - 📋 生成认证标签用于完整性验证
 
 **核心特性：**
+
 - ✅ 完全本地运行，无需网络
 - ✅ 不依赖区块链或外部服务
 - ✅ 军事级加密（AES-256）
@@ -31,12 +768,14 @@
 ## 🆕 v3.1 版本更新
 
 ### 主要变更
+
 - ✨ **配置文件导入**：系统参数不再硬编码，改用 `system_params.json` 配置文件
 - 🔧 **灵活配置**：支持不同安全级别参数切换，无需重新编译
 - 📝 **参数管理**：系统参数可追踪、版本控制
 - 🛡️ **安全性提升**：方便更换配对参数提升安全等级
 
 ### 配置文件结构
+
 ```json
 {
   "pairing_type": "a",
@@ -61,6 +800,7 @@
 ## 🔧 安装依赖
 
 ### Ubuntu/Debian
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y build-essential cmake
@@ -68,6 +808,7 @@ sudo apt-get install -y libssl-dev libgmp-dev libjsoncpp-dev libpbc-dev
 ```
 
 ### CentOS/RHEL
+
 ```bash
 sudo yum install -y gcc-c++ cmake
 sudo yum install -y openssl-devel gmp-devel jsoncpp-devel pbc-devel
@@ -196,6 +937,7 @@ cp system_params.json /path/to/build/
 ```
 
 **输出文件说明：**
+
 - `encrypted_report.enc` - 加密后的文件（包含IV和密文）
 - `encrypted_report.json` - 元数据文件（文件ID、认证标签、关键词标签）
 
@@ -241,17 +983,18 @@ cp system_params.json /path/to/build/
 
 ## 📋 命令参考
 
-| 命令 | 快捷键 | 功能 |
-|------|--------|------|
-| `init` | 1 | 初始化加密系统（从JSON加载配对参数） |
-| `keygen` | 2 | 生成新的加密密钥 |
-| `save-keys` | 3 | 保存密钥到文件 |
-| `load-keys` | 4 | 从文件加载密钥 |
-| `encrypt` | 5 | 加密文件并生成元数据 |
-| `decrypt` | 6 | 解密文件 |
-| `search-token` | 7 | 生成搜索令牌 |
-| `help` | 8 | 显示帮助信息 |
-| `quit` | 9 | 退出程序 |
+
+| 命令           | 快捷键 | 功能                                 |
+| -------------- | ------ | ------------------------------------ |
+| `init`         | 1      | 初始化加密系统（从JSON加载配对参数） |
+| `keygen`       | 2      | 生成新的加密密钥                     |
+| `save-keys`    | 3      | 保存密钥到文件                       |
+| `load-keys`    | 4      | 从文件加载密钥                       |
+| `encrypt`      | 5      | 加密文件并生成元数据                 |
+| `decrypt`      | 6      | 解密文件                             |
+| `search-token` | 7      | 生成搜索令牌                         |
+| `help`         | 8      | 显示帮助信息                         |
+| `quit`         | 9      | 退出程序                             |
 
 ---
 
@@ -283,6 +1026,7 @@ cp system_params.json /path/to/build/
 ```
 
 **字段说明：**
+
 - `pairing_type`: 配对类型（Type A）
 - `parameters`: 配对密码学参数（见下文详细解释）
 - `system_values`: 系统运算参数
@@ -341,16 +1085,18 @@ cp system_params.json /path/to/build/
 
 ### 加密算法
 
-| 组件 | 算法 | 安全级别 |
-|------|------|----------|
-| 文件加密 | AES-256-CBC | 256位 |
-| 关键词加密 | AES-256-CBC | 256位 |
-| 认证标签 | 配对密码学（PBC） | 512位 |
-| 哈希函数 | SHA-256 | 256位 |
+
+| 组件       | 算法              | 安全级别 |
+| ---------- | ----------------- | -------- |
+| 文件加密   | AES-256-CBC       | 256位    |
+| 关键词加密 | AES-256-CBC       | 256位    |
+| 认证标签   | 配对密码学（PBC） | 512位    |
+| 哈希函数   | SHA-256           | 256位    |
 
 ### 前向安全性
 
 本工具实现了**前向安全的可搜索加密**：
+
 - 每次上传新文件时，关键词状态会更新
 - 即使获得当前搜索令牌，也无法搜索历史文件
 - 保护用户的搜索隐私
@@ -358,6 +1104,7 @@ cp system_params.json /path/to/build/
 ### 密钥管理建议
 
 **DO（推荐）：**
+
 - ✅ 立即备份密钥文件到多个安全位置
 - ✅ 使用强密码加密存储密钥文件
 - ✅ 定期测试密钥备份是否可用
@@ -365,6 +1112,7 @@ cp system_params.json /path/to/build/
 - ✅ 妥善保管 `system_params.json` 配置文件
 
 **DON'T（禁止）：**
+
 - ❌ 不要将密钥文件存储在云端（除非加密）
 - ❌ 不要通过邮件/聊天软件发送密钥
 - ❌ 不要在公共电脑上生成或使用密钥
@@ -380,16 +1128,17 @@ cp system_params.json /path/to/build/
 如需更换更高安全级别的参数：
 
 1. **备份当前配置**
+
    ```bash
    cp system_params.json system_params_backup.json
    ```
-
 2. **编辑配置文件**
+
    ```bash
    nano system_params.json
    ```
-
 3. **重新初始化系统**
+
    ```bash
    ./storage_client
    > init
@@ -415,41 +1164,50 @@ cp system_params_prod.json system_params.json
 ## 🛠️ 常见问题
 
 ### Q1：丢失密钥文件怎么办？
+
 **A：无法恢复！** 密钥丢失后，所有加密文件将永久无法解密。请务必做好备份。
 
 ### Q2：丢失 system_params.json 怎么办？
+
 **A：** 可以从项目源码或其他已部署的实例复制该文件。参数是公开的，不影响安全性。但如果参数不一致，将无法正确验证文件。
 
 ### Q3：可以修改已加密文件的关键词吗？
+
 **A：不可以。** 关键词在加密时就已固定。如需修改，请先解密，然后用新关键词重新加密。
 
 ### Q4：初始化失败：找不到配置文件
+
 **A：** 请确保 `system_params.json` 与可执行文件在同一目录。检查文件名拼写是否正确。
 
 ### Q5：可以自定义系统参数吗？
+
 **A：** 可以，但需要深入理解配对密码学。建议使用默认参数或咨询密码学专家。错误的参数可能导致安全性降低。
 
 ### Q6：元数据文件（.json）可以公开吗？
+
 **A：不建议。** 虽然元数据不包含文件内容，但包含关键词标签信息，可能泄露隐私。
 
 ### Q7：如何验证文件完整性？
+
 **A：** 元数据中的 `auth_tags` 用于完整性验证。可以开发验证工具来检查文件是否被篡改。
 
 ### Q8：支持批量加密吗？
+
 **A：** 当前版本不支持。可以编写脚本循环调用 `encrypt` 命令。
 
 ---
 
 ## 📊 性能参数
 
-| 项目 | 参数 |
-|------|------|
-| 块大小 | 4096 字节 |
-| 扇区大小 | 256 字节 |
+
+| 项目         | 参数                         |
+| ------------ | ---------------------------- |
+| 块大小       | 4096 字节                    |
+| 扇区大小     | 256 字节                     |
 | 最大文件大小 | 理论无限制（受存储空间限制） |
-| 加密速度 | ~50 MB/s（取决于CPU性能） |
-| 解密速度 | ~50 MB/s（取决于CPU性能） |
-| 配置加载时间 | <100ms |
+| 加密速度     | ~50 MB/s（取决于CPU性能）    |
+| 解密速度     | ~50 MB/s（取决于CPU性能）    |
+| 配置加载时间 | <100ms                       |
 
 ---
 
@@ -480,22 +1238,23 @@ AES-256-CBC 加密
 ### 核心组件
 
 1. **配置管理（新增）**
+
    - JSON解析与验证
    - 参数动态加载
    - 错误处理与提示
-
 2. **配对密码系统**
+
    - 使用 PBC 库
    - Type A 曲线
    - 可配置参数
    - 512位安全性（默认）
-
 3. **哈希函数**
+
    - H1: 字符串 → Zp
    - H2: 字符串 → G1
    - H3: 字符串 → 字符串（SHA-256）
-
 4. **关键词状态链**
+
    - 每个关键词维护一个状态
    - 状态通过指针连接（前向安全）
    - 支持高效的关键词搜索
@@ -539,10 +1298,11 @@ project/
 
 本项目基于以下研究论文：
 
-**"Enabling Verifiable Search and Integrity Auditing in Encrypted Decentralized Storage Using One Proof"**  
+**"Enabling Verifiable Search and Integrity Auditing in Encrypted Decentralized Storage Using One Proof"**
 作者：Mingyang Song, Zhongyun Hua, et al.
 
 使用的开源库：
+
 - [PBC Library](https://crypto.stanford.edu/pbc/) - 配对密码学
 - [OpenSSL](https://www.openssl.org/) - 加密算法
 - [GMP](https://gmplib.org/) - 大数运算
@@ -561,6 +1321,7 @@ project/
 ## 📋 更新日志
 
 ### v3.1.0 (2025-11-08)
+
 - ✨ 新增：JSON配置文件支持
 - 🔧 改进：系统参数可配置化
 - 📝 新增：PARAMETERS.md 参数说明文档
@@ -568,6 +1329,7 @@ project/
 - 📖 更新：README文档
 
 ### v3.0.0 (2025-11-01)
+
 - 🎉 初始版本发布
 - ✅ 基本加密解密功能
 - ✅ 可搜索加密
@@ -587,15 +1349,14 @@ project/
 
 ---
 
-**版本**: 3.1.0  
-**最后更新**: 2025年11月08日  
-**状态**: 生产就绪 ✅  
+**版本**: 3.1.0
+**最后更新**: 2025年11月08日
+**状态**: 生产就绪 ✅
 **配置方式**: JSON导入 🆕
 
 ---
 
 **Stay Secure! 🔐**
-
 
 # 版本更新说明 - v3.2
 
@@ -608,19 +1369,22 @@ project/
 ## ✨ 新增功能
 
 ### 1. 关键词状态文件管理
+
 - 新增 `keyword_states.json` 文件，独立管理所有关键词的历史状态
 - 与密钥文件分离，便于备份和版本控制
 - 支持手动加载、保存和查询
 
 ### 2. 新增命令
 
-| 命令 | 快捷键 | 功能 |
-|------|--------|------|
-| `load-states` | 10 | 加载关键词状态文件 |
-| `save-states` | 11 | 保存关键词状态文件 |
-| `query-state` | 12 | 查询关键词当前状态和历史 |
+
+| 命令          | 快捷键 | 功能                     |
+| ------------- | ------ | ------------------------ |
+| `load-states` | 10     | 加载关键词状态文件       |
+| `save-states` | 11     | 保存关键词状态文件       |
+| `query-state` | 12     | 查询关键词当前状态和历史 |
 
 ### 3. 自动状态更新
+
 - 加密文件时，如果已加载状态文件，会自动更新状态并保存
 - 无需手动操作，提升使用便利性
 
@@ -631,6 +1395,7 @@ project/
 ### 修改的文件
 
 1. **client.h**
+
    - 新增函数声明：
      - `loadKeywordStates()`
      - `saveKeywordStates()`
@@ -641,13 +1406,13 @@ project/
      - `keyword_states_file_` - 状态文件路径
      - `states_loaded_` - 加载标记
      - `keyword_states_data_` - JSON数据存储
-
 2. **client.cpp**
+
    - 实现所有新增函数
    - 修改 `encryptFile()` 函数，添加自动状态更新逻辑
    - 修改构造函数，初始化 `states_loaded_ = false`
-
 3. **main.cpp**
+
    - 添加三个新命令的处理逻辑
    - 更新帮助菜单显示
    - 更新版本号为 v3.2
@@ -665,11 +1430,13 @@ project/
 ## 🔄 工作流程变化
 
 ### 之前的流程 (v3.1)
+
 ```
 init → keygen → encrypt → encrypt → ...
 ```
 
 ### 现在的流程 (v3.2)
+
 ```
 init → keygen → load-states → encrypt → encrypt → ...
                   ↑                ↓
@@ -743,11 +1510,13 @@ init → keygen → load-states → encrypt → encrypt → ...
 ## ⚠️ 重要提示
 
 ### 状态文件的作用
+
 - **记录关键词演化**：每个关键词的所有历史状态
 - **支持前向安全**：保证搜索令牌的有效性
 - **审计追踪**：可追溯每个关键词的使用历史
 
 ### 注意事项
+
 1. ✅ 状态文件可以与多人共享（不包含敏感信息）
 2. ✅ 建议定期备份状态文件
 3. ⚠️ 状态文件丢失不影响解密，但会丢失历史记录
@@ -757,13 +1526,14 @@ init → keygen → load-states → encrypt → encrypt → ...
 
 ## 🆚 与 v3.1 的区别
 
-| 特性 | v3.1 | v3.2 |
-|------|------|------|
+
+| 特性     | v3.1           | v3.2           |
+| -------- | -------------- | -------------- |
 | 状态存储 | 仅在密钥文件中 | 独立的JSON文件 |
-| 历史记录 | 无 | 完整的状态历史 |
-| 状态查询 | 不支持 | 支持查询和显示 |
-| 状态管理 | 自动（不可见） | 手动+自动结合 |
-| 文件格式 | 二进制 | JSON（可读） |
+| 历史记录 | 无             | 完整的状态历史 |
+| 状态查询 | 不支持         | 支持查询和显示 |
+| 状态管理 | 自动（不可见） | 手动+自动结合  |
+| 文件格式 | 二进制         | JSON（可读）   |
 
 ---
 
@@ -794,10 +1564,11 @@ make -j4
 ## 🚀 后续计划
 
 可能的增强功能：
-- [ ] 状态文件加密
-- [ ] 批量导入/导出关键词
-- [ ] 状态冲突自动合并
-- [ ] Web界面可视化管理
+
+- [ ]  状态文件加密
+- [ ]  批量导入/导出关键词
+- [ ]  状态冲突自动合并
+- [ ]  Web界面可视化管理
 
 ---
 
@@ -807,6 +1578,6 @@ make -j4
 
 ---
 
-**版本**: 3.2  
-**发布日期**: 2025-11-09  
+**版本**: 3.2
+**发布日期**: 2025-11-09
 **兼容性**: 向后兼容 v3.1 的所有功能
