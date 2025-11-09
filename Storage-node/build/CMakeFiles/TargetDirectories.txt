@@ -1,0 +1,3 @@
+/home/zsw/codes/Audit-and-Integrity/Storage-node/build/CMakeFiles/storage_node.dir
+/home/zsw/codes/Audit-and-Integrity/Storage-node/build/CMakeFiles/edit_cache.dir
+/home/zsw/codes/Audit-and-Integrity/Storage-node/build/CMakeFiles/rebuild_cache.dir

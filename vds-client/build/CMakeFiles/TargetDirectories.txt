@@ -1,0 +1,3 @@
+/home/zsw/codes/Audit-and-Integrity/vds-client/build/CMakeFiles/storage_client.dir
+/home/zsw/codes/Audit-and-Integrity/vds-client/build/CMakeFiles/edit_cache.dir
+/home/zsw/codes/Audit-and-Integrity/vds-client/build/CMakeFiles/rebuild_cache.dir

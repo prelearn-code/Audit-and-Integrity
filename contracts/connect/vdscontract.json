@@ -1,0 +1,766 @@
+[
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "client",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "ClientRegistered",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "node",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "reputation",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "status",
+        "type": "bool"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "NodeAudited",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "node",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "nodeID",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "NodeRegistered",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "proofKey",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "node",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "enum VDSBlockchainCore.ProofType",
+        "name": "proofType",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "ProofSubmitted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "proofKey",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "verifier",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "result",
+        "type": "bool"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "ProofVerified",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "keywordHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "requester",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "SearchRequested",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "node",
+        "type": "address"
+      }
+    ],
+    "name": "activateNode",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "admin",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "node",
+        "type": "address"
+      }
+    ],
+    "name": "auditNode",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "clients",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "pubKey",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "joinedAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "isRegistered",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "node",
+        "type": "address"
+      }
+    ],
+    "name": "deactivateNode",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "node",
+        "type": "address"
+      }
+    ],
+    "name": "getNodeReputation",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "proofKey",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getProof",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "fileID",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "node",
+            "type": "address"
+          },
+          {
+            "internalType": "string",
+            "name": "proofURI",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          },
+          {
+            "internalType": "enum VDSBlockchainCore.ProofType",
+            "name": "proofType",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32[]",
+            "name": "results",
+            "type": "bytes32[]"
+          },
+          {
+            "internalType": "bool",
+            "name": "verified",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint256",
+            "name": "verificationCount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct VDSBlockchainCore.ProofInfo",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "keywordHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getSearchRequest",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "keywordHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "tokenHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "stateHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "requester",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "processed",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct VDSBlockchainCore.SearchRequest",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "proofKey",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getVerifications",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "verifier",
+            "type": "address"
+          },
+          {
+            "internalType": "bool",
+            "name": "result",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct VDSBlockchainCore.VerificationInfo[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "minVerifications",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "name": "proofs",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "fileID",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "node",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "proofURI",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum VDSBlockchainCore.ProofType",
+        "name": "proofType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "verified",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "verificationCount",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "pubKey",
+        "type": "string"
+      }
+    ],
+    "name": "registerClient",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "nodeID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "endpoint",
+        "type": "string"
+      }
+    ],
+    "name": "registerNode",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "reputationThreshold",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "keywordHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "tokenHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "stateHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "requestSearch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "name": "searchRequests",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "keywordHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "tokenHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "stateHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "requester",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "processed",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_minVerifications",
+        "type": "uint256"
+      }
+    ],
+    "name": "setMinVerifications",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_threshold",
+        "type": "uint256"
+      }
+    ],
+    "name": "setReputationThreshold",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "storageNodes",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "nodeID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "endpoint",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "lastAudit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "reputation",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "isActive",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "fileID",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "proofURI",
+        "type": "string"
+      }
+    ],
+    "name": "submitAuditProof",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "keywordHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32[]",
+        "name": "results",
+        "type": "bytes32[]"
+      },
+      {
+        "internalType": "string",
+        "name": "proofURI",
+        "type": "string"
+      }
+    ],
+    "name": "submitSearchProof",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "verifications",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "verifier",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "result",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "auditKey",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bool",
+        "name": "result",
+        "type": "bool"
+      }
+    ],
+    "name": "verifyAuditProof",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "keywordHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bool",
+        "name": "result",
+        "type": "bool"
+      }
+    ],
+    "name": "verifySearchProof",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

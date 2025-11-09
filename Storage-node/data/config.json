@@ -1,0 +1,33 @@
+{
+    "version": "3.0",
+    "node": {
+        "node_id": "storage_node_001",
+        "created_at": "2025-11-09T10:00:00Z",
+        "description": "去中心化存储节点"
+    },
+    "paths": {
+        "data_dir": "./data",
+        "files_dir": "./data/files",
+        "metadata_dir": "./data/metadata",
+        "index_db": "./data/index_db.json"
+    },
+    "server": {
+        "port": 9000,
+        "enable_server": false,
+        "max_connections": 10
+    },
+    "storage": {
+        "max_file_size_mb": 100,
+        "max_total_storage_gb": 10,
+        "enable_compression": false
+    },
+    "cryptography": {
+        "pairing_params_file": "./params/a.param",
+        "hash_algorithm": "SHA256"
+    },
+    "logging": {
+        "enable_logging": true,
+        "log_file": "./data/storage_node.log",
+        "log_level": "INFO"
+    }
+}

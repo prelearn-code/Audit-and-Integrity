@@ -1,0 +1,1 @@
+/usr/bin/c++  -Wall -Wextra CMakeFiles/storage_node.dir/main.cpp.o CMakeFiles/storage_node.dir/storage_node.cpp.o -o storage_node  -Wl,-rpath,/usr/local/lib /usr/lib/x86_64-linux-gnu/libssl.so /usr/lib/x86_64-linux-gnu/libcrypto.so /usr/lib/x86_64-linux-gnu/libcurl.so /usr/local/lib/libpbc.so -lgmp -ljsoncpp -lpthread 
