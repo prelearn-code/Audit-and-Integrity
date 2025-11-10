@@ -61,7 +61,30 @@ bool StorageNode::setup_cryptography(int security_param,
     // 设置随机生成器
     element_random(g);
     element_random(mu);
-    mpz_set_ui(N, 1000000007); // 大质数
+    
+    // 从配对参数中提取 p 和 q，计算 N = p × q
+    // 对于 type a 配对，p = q（群的阶）
+    mpz_t p, q;
+    mpz_init(p);
+    mpz_init(q);
+    
+    // 从配对参数中获取群的阶
+    // 对于 type a 配对，使用配对中定义的q值
+    mpz_set_str(p, "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791", 10);
+    mpz_set_str(q, "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791", 10);
+    
+    // 计算 N = p × q
+    mpz_mul(N, p, q);
+    
+    // 输出 N 的信息（截断显示）
+    char* n_str = mpz_get_str(NULL, 10, N);
+    std::string n_full(n_str);
+    free(n_str);
+    std::cout << "   N = p × q (前50位): " << n_full.substr(0, 50) << "..." << std::endl;
+    std::cout << "   N 总位数: " << n_full.length() << " 位十进制数" << std::endl;
+    
+    mpz_clear(p);
+    mpz_clear(q);
     
     crypto_initialized = true;
     std::cout << "✅ 密码学参数初始化成功" << std::endl;
@@ -87,64 +110,76 @@ bool StorageNode::save_public_params(const std::string& filepath) {
     Json::Value root;
     
     // 基本信息
-    root["version"] = "1.0";
+    root["version"] = "2.0";  // 升级版本号，表示使用新的序列化格式
     root["created_at"] = get_current_timestamp();
-    root["description"] = "Public Parameters for Decentralized Storage System";
+    root["description"] = "Public Parameters (N, g, μ) for Decentralized Storage System";
+    root["serialization_method"] = "element_to_bytes";  // 标注序列化方法
     
-    // 公共参数 PP = {p, q, G_1, G_2, e}
+    // 公共参数 PP = {N, g, μ}
     Json::Value public_params;
     
-    // p和q: 主要质数（从pairing参数获取）
-    // 对于type a配对，p = q (群G1和G2的阶)
-    public_params["p"] = "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791";
-    public_params["q"] = "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791";
+    // N: 计算得到的大整数 N = p × q
+    char* n_str = mpz_get_str(NULL, 10, N);
+    public_params["N"] = std::string(n_str);
+    free(n_str);
     
-    // G_1: 第一个群的描述
-    Json::Value g1_info;
-    g1_info["type"] = "G1 (Elliptic Curve Group)";
-    g1_info["order"] = public_params["q"];
-    g1_info["description"] = "Additive group on elliptic curve";
-    
-    // 序列化生成元g
-    size_t g_len = element_length_in_bytes(g);
+    // g: G_1的生成元（使用element_to_bytes序列化）
+    int g_len = element_length_in_bytes(g);
     unsigned char* g_bytes = new unsigned char[g_len];
     element_to_bytes(g_bytes, g);
-    g1_info["generator_g_hex"] = bytes_to_hex(g_bytes, g_len);
+    public_params["g"] = bytes_to_hex(g_bytes, g_len);  // 转为hex字符串存储
+    public_params["g_length"] = g_len;  // 保存字节长度，用于验证
     delete[] g_bytes;
     
-    public_params["G_1"] = g1_info;
-    
-    // G_2: 目标群的描述
-    Json::Value g2_info;
-    g2_info["type"] = "G_T (Target Group)";
-    g2_info["order"] = public_params["q"];
-    g2_info["description"] = "Multiplicative target group for pairing";
-    public_params["G_2"] = g2_info;
-    
-    // e: 双线性配对函数
-    Json::Value pairing_info;
-    pairing_info["type"] = "Bilinear Pairing";
-    pairing_info["mapping"] = "e: G_1 × G_1 → G_2";
-    pairing_info["properties"].append("bilinearity");
-    pairing_info["properties"].append("non-degeneracy");
-    pairing_info["properties"].append("computability");
-    pairing_info["pairing_type"] = "type_a (symmetric)";
-    public_params["e"] = pairing_info;
+    // μ: G_1的生成元（使用element_to_bytes序列化）
+    // 注意：在type a配对中，G_1和G_2是同一个群，但μ是独立的生成元
+    int mu_len = element_length_in_bytes(mu);
+    unsigned char* mu_bytes = new unsigned char[mu_len];
+    element_to_bytes(mu_bytes, mu);
+    public_params["mu"] = bytes_to_hex(mu_bytes, mu_len);  // 转为hex字符串存储
+    public_params["mu_length"] = mu_len;  // 保存字节长度，用于验证
+    delete[] mu_bytes;
     
     root["public_params"] = public_params;
     
     // 保存到文件
-    return save_json_to_file(root, filepath);
+    bool success = save_json_to_file(root, filepath);
+    
+    if (success) {
+        std::cout << "   ✅ 公共参数已保存 (N, g, μ)" << std::endl;
+        std::cout << "   📊 序列化信息:" << std::endl;
+        std::cout << "      - g 字节长度: " << g_len << std::endl;
+        std::cout << "      - μ 字节长度: " << mu_len << std::endl;
+    }
+    
+    return success;
 }
 
 bool StorageNode::load_public_params(const std::string& filepath) {
+    std::cout << "🔄 从文件加载公共参数并初始化密码学系统..." << std::endl;
+    
     if (!file_exists(filepath)) {
         std::cerr << "❌ 公共参数文件不存在: " << filepath << std::endl;
         return false;
     }
     
+    // 加载JSON文件
     Json::Value root = load_json_from_file(filepath);
     
+    if (!root.isMember("public_params")) {
+        std::cerr << "❌ 公共参数格式错误" << std::endl;
+        return false;
+    }
+    
+    Json::Value pp = root["public_params"];
+    
+    // 检查必需字段
+    if (!pp.isMember("N") || !pp.isMember("g") || !pp.isMember("mu")) {
+        std::cerr << "❌ 公共参数缺少必需字段 (N, g, μ)" << std::endl;
+        return false;
+    }
+    
+    // ============ 步骤1: 显示公共参数信息 ============
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     std::cout << "📖 公共参数 (Public Parameters)" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
@@ -152,33 +187,278 @@ bool StorageNode::load_public_params(const std::string& filepath) {
     std::cout << "创建时间:     " << root["created_at"].asString() << std::endl;
     std::cout << "描述:         " << root["description"].asString() << std::endl;
     
-    Json::Value pp = root["public_params"];
-    
-    std::cout << "\n[群阶参数]" << std::endl;
-    std::cout << "p:            " << pp["p"].asString().substr(0, 40) << "..." << std::endl;
-    std::cout << "q:            " << pp["q"].asString().substr(0, 40) << "..." << std::endl;
-    
-    std::cout << "\n[群 G_1 信息]" << std::endl;
-    std::cout << "类型:         " << pp["G_1"]["type"].asString() << std::endl;
-    std::cout << "阶:           " << pp["G_1"]["order"].asString().substr(0, 20) << "..." << std::endl;
-    std::cout << "描述:         " << pp["G_1"]["description"].asString() << std::endl;
-    std::cout << "生成元g:      " << pp["G_1"]["generator_g_hex"].asString().substr(0, 40) << "..." << std::endl;
-    
-    std::cout << "\n[群 G_2 信息]" << std::endl;
-    std::cout << "类型:         " << pp["G_2"]["type"].asString() << std::endl;
-    std::cout << "阶:           " << pp["G_2"]["order"].asString().substr(0, 20) << "..." << std::endl;
-    std::cout << "描述:         " << pp["G_2"]["description"].asString() << std::endl;
-    
-    std::cout << "\n[双线性配对 e]" << std::endl;
-    std::cout << "类型:         " << pp["e"]["type"].asString() << std::endl;
-    std::cout << "映射:         " << pp["e"]["mapping"].asString() << std::endl;
-    std::cout << "配对类型:     " << pp["e"]["pairing_type"].asString() << std::endl;
-    std::cout << "性质:         ";
-    for (const auto& prop : pp["e"]["properties"]) {
-        std::cout << prop.asString() << " ";
+    // 检查序列化方法（兼容旧版本）
+    std::string serialization_method = "element_to_mpz";  // 默认旧格式
+    if (root.isMember("serialization_method")) {
+        serialization_method = root["serialization_method"].asString();
     }
-    std::cout << std::endl;
+    std::cout << "序列化方法:   " << serialization_method << std::endl;
     
+    std::cout << "\n[公共参数 PP = {N, g, μ}]" << std::endl;
+    
+    // N: 大整数
+    std::string n_str = pp["N"].asString();
+    std::cout << "N (前50位):   " << n_str.substr(0, 50) << "..." << std::endl;
+    std::cout << "N (总位数):   " << n_str.length() << " 位十进制数" << std::endl;
+    
+    // g: G_1的生成元
+    std::string g_str = pp["g"].asString();
+    if (serialization_method == "element_to_bytes") {
+        int g_len = pp.isMember("g_length") ? pp["g_length"].asInt() : (g_str.length() / 2);
+        std::cout << "g (字节长度): " << g_len << " bytes" << std::endl;
+        std::cout << "g (hex前40位):" << g_str.substr(0, 40) << "..." << std::endl;
+    } else {
+        std::cout << "g (前40位):   " << g_str.substr(0, 40) << "..." << std::endl;
+        std::cout << "g (总长度):   " << g_str.length() << " 位十进制数" << std::endl;
+    }
+    
+    // μ: G_1的生成元
+    std::string mu_str = pp["mu"].asString();
+    if (serialization_method == "element_to_bytes") {
+        int mu_len = pp.isMember("mu_length") ? pp["mu_length"].asInt() : (mu_str.length() / 2);
+        std::cout << "μ (字节长度): " << mu_len << " bytes" << std::endl;
+        std::cout << "μ (hex前40位):" << mu_str.substr(0, 40) << "..." << std::endl;
+    } else {
+        std::cout << "μ (前40位):   " << mu_str.substr(0, 40) << "..." << std::endl;
+        std::cout << "μ (总长度):   " << mu_str.length() << " 位十进制数" << std::endl;
+    }
+    
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+    
+    // ============ 步骤2: 初始化密码学系统 ============
+    std::cout << "🔧 初始化密码学系统..." << std::endl;
+    
+    // 初始化配对参数（使用相同的type a配对）
+    const char* param_str = 
+        "type a\n"
+        "q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791\n"
+        "h 12016012264891146079388821366740534204802954401251311822919615131047207289359704531102844802183906537786776\n"
+        "r 730750818665451621361119245571504901405976559617\n"
+        "exp2 159\n"
+        "exp1 107\n"
+        "sign1 1\n"
+        "sign0 1\n";
+    
+    if (pairing_init_set_buf(pairing, param_str, strlen(param_str)) != 0) {
+        std::cerr << "❌ 配对参数初始化失败" << std::endl;
+        return false;
+    }
+    
+    // 初始化元素
+    element_init_G1(g, pairing);
+    element_init_G1(mu, pairing);
+    mpz_init(N);
+    
+    // ============ 步骤3: 加载参数到内存 ============
+    
+    // 加载 N
+    if (mpz_set_str(N, n_str.c_str(), 10) != 0) {
+        std::cerr << "❌ N 参数格式错误" << std::endl;
+        element_clear(g);
+        element_clear(mu);
+        mpz_clear(N);
+        pairing_clear(pairing);
+        return false;
+    }
+    std::cout << "   ✅ 加载 N (" << n_str.length() << " 位十进制数)" << std::endl;
+    
+    // 加载 g - 根据序列化方法选择不同的加载方式
+    if (serialization_method == "element_to_bytes") {
+        // 新格式：使用 element_from_bytes
+        std::vector<unsigned char> g_bytes = hex_to_bytes(g_str);
+        if (g_bytes.empty()) {
+            std::cerr << "❌ g 参数hex解码失败" << std::endl;
+            element_clear(g);
+            element_clear(mu);
+            mpz_clear(N);
+            pairing_clear(pairing);
+            return false;
+        }
+        
+        int bytes_read = element_from_bytes(g, g_bytes.data());
+        if (bytes_read <= 0) {
+            std::cerr << "❌ g 参数反序列化失败 (element_from_bytes返回: " << bytes_read << ")" << std::endl;
+            element_clear(g);
+            element_clear(mu);
+            mpz_clear(N);
+            pairing_clear(pairing);
+            return false;
+        }
+        std::cout << "   ✅ 加载 g (bytes长度: " << g_bytes.size() << ")" << std::endl;
+    } else {
+        // 旧格式：使用 element_set_mpz（兼容性支持）
+        mpz_t g_mpz;
+        mpz_init(g_mpz);
+        if (mpz_set_str(g_mpz, g_str.c_str(), 10) != 0) {
+            std::cerr << "❌ g 参数格式错误" << std::endl;
+            mpz_clear(g_mpz);
+            element_clear(g);
+            element_clear(mu);
+            mpz_clear(N);
+            pairing_clear(pairing);
+            return false;
+        }
+        element_set_mpz(g, g_mpz);
+        mpz_clear(g_mpz);
+        std::cout << "   ✅ 加载 g (" << g_str.length() << " 位十进制数，使用兼容模式)" << std::endl;
+        std::cout << "   ⚠️  建议重新生成并保存公共参数以使用新格式" << std::endl;
+    }
+    
+    // 加载 μ - 根据序列化方法选择不同的加载方式
+    if (serialization_method == "element_to_bytes") {
+        // 新格式：使用 element_from_bytes
+        std::vector<unsigned char> mu_bytes = hex_to_bytes(mu_str);
+        if (mu_bytes.empty()) {
+            std::cerr << "❌ μ 参数hex解码失败" << std::endl;
+            element_clear(g);
+            element_clear(mu);
+            mpz_clear(N);
+            pairing_clear(pairing);
+            return false;
+        }
+        
+        int bytes_read = element_from_bytes(mu, mu_bytes.data());
+        if (bytes_read <= 0) {
+            std::cerr << "❌ μ 参数反序列化失败 (element_from_bytes返回: " << bytes_read << ")" << std::endl;
+            element_clear(g);
+            element_clear(mu);
+            mpz_clear(N);
+            pairing_clear(pairing);
+            return false;
+        }
+        std::cout << "   ✅ 加载 μ (bytes长度: " << mu_bytes.size() << ")" << std::endl;
+    } else {
+        // 旧格式：使用 element_set_mpz（兼容性支持）
+        mpz_t mu_mpz;
+        mpz_init(mu_mpz);
+        if (mpz_set_str(mu_mpz, mu_str.c_str(), 10) != 0) {
+            std::cerr << "❌ μ 参数格式错误" << std::endl;
+            mpz_clear(mu_mpz);
+            element_clear(g);
+            element_clear(mu);
+            mpz_clear(N);
+            pairing_clear(pairing);
+            return false;
+        }
+        element_set_mpz(mu, mu_mpz);
+        mpz_clear(mu_mpz);
+        std::cout << "   ✅ 加载 μ (" << mu_str.length() << " 位十进制数，使用兼容模式)" << std::endl;
+        std::cout << "   ⚠️  建议重新生成并保存公共参数以使用新格式" << std::endl;
+    }
+    
+    crypto_initialized = true;
+    std::cout << "✅ 密码学系统已从公共参数恢复\n" << std::endl;
+    
+    return true;
+}
+
+bool StorageNode::display_public_params(const std::string& filepath) {
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "🔑 查看公共参数" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    
+    // 情况1: 如果提供了文件路径，从文件读取并显示
+    if (!filepath.empty()) {
+        if (!file_exists(filepath)) {
+            std::cerr << "❌ 公共参数文件不存在: " << filepath << std::endl;
+            return false;
+        }
+        
+        std::cout << "📄 从文件读取: " << filepath << std::endl;
+        
+        // 加载JSON文件
+        Json::Value root = load_json_from_file(filepath);
+        
+        if (!root.isMember("public_params")) {
+            std::cerr << "❌ 公共参数格式错误" << std::endl;
+            return false;
+        }
+        
+        Json::Value pp = root["public_params"];
+        
+        // 检查必需字段
+        if (!pp.isMember("N") || !pp.isMember("g") || !pp.isMember("mu")) {
+            std::cerr << "❌ 公共参数缺少必需字段 (N, g, μ)" << std::endl;
+            return false;
+        }
+        
+        // 显示基本信息
+        std::cout << "\n📋 文件信息:" << std::endl;
+        std::cout << "   版本:         " << root["version"].asString() << std::endl;
+        std::cout << "   创建时间:     " << root["created_at"].asString() << std::endl;
+        std::cout << "   描述:         " << root["description"].asString() << std::endl;
+        
+        // 检查序列化方法
+        std::string serialization_method = "element_to_mpz";  // 默认旧格式
+        if (root.isMember("serialization_method")) {
+            serialization_method = root["serialization_method"].asString();
+        }
+        std::cout << "   序列化方法:   " << serialization_method << std::endl;
+        
+        std::cout << "\n[公共参数 PP = {N, g, μ}]" << std::endl;
+        
+        // N: 大整数
+        std::string n_str = pp["N"].asString();
+        std::cout << "   N (前50位):   " << n_str.substr(0, 50) << "..." << std::endl;
+        std::cout << "   N (总位数):   " << n_str.length() << " 位十进制数" << std::endl;
+        
+        // g: G_1的生成元
+        std::string g_str = pp["g"].asString();
+        if (serialization_method == "element_to_bytes") {
+            int g_len = pp.isMember("g_length") ? pp["g_length"].asInt() : (g_str.length() / 2);
+            std::cout << "   g (字节长度): " << g_len << " bytes" << std::endl;
+            std::cout << "   g (hex前40位):" << g_str.substr(0, 40) << "..." << std::endl;
+        } else {
+            std::cout << "   g (前40位):   " << g_str.substr(0, 40) << "..." << std::endl;
+            std::cout << "   g (总长度):   " << g_str.length() << " 位十进制数" << std::endl;
+        }
+        
+        // μ: G_1的生成元
+        std::string mu_str = pp["mu"].asString();
+        if (serialization_method == "element_to_bytes") {
+            int mu_len = pp.isMember("mu_length") ? pp["mu_length"].asInt() : (mu_str.length() / 2);
+            std::cout << "   μ (字节长度): " << mu_len << " bytes" << std::endl;
+            std::cout << "   μ (hex前40位):" << mu_str.substr(0, 40) << "..." << std::endl;
+        } else {
+            std::cout << "   μ (前40位):   " << mu_str.substr(0, 40) << "..." << std::endl;
+            std::cout << "   μ (总长度):   " << mu_str.length() << " 位十进制数" << std::endl;
+        }
+        
+        std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+        std::cout << "💡 提示: 这是只读查看，不会修改系统状态" << std::endl;
+        std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+        
+        return true;
+    }
+    
+    // 情况2: 如果未提供文件路径，显示内存中的参数
+    if (!crypto_initialized) {
+        std::cerr << "❌ 密码学系统未初始化，无法显示内存中的参数" << std::endl;
+        std::cerr << "💡 提示: 请提供文件路径，或先加载公共参数" << std::endl;
+        return false;
+    }
+    
+    std::cout << "📦 显示内存中的公共参数:" << std::endl;
+    std::cout << "\n[公共参数 PP = {N, g, μ}]" << std::endl;
+    
+    // N: 大整数
+    char* n_str = mpz_get_str(NULL, 10, N);
+    std::string n_full(n_str);
+    free(n_str);
+    std::cout << "   N (前50位):   " << n_full.substr(0, 50) << "..." << std::endl;
+    std::cout << "   N (总位数):   " << n_full.length() << " 位十进制数" << std::endl;
+    
+    // g: G_1的生成元
+    int g_len = element_length_in_bytes(g);
+    std::cout << "   g (字节长度): " << g_len << " bytes" << std::endl;
+    
+    // μ: G_1的生成元
+    int mu_len = element_length_in_bytes(mu);
+    std::cout << "   μ (字节长度): " << mu_len << " bytes" << std::endl;
+    
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "✅ 密码学系统状态: 已初始化" << std::endl;
+    std::cout << "💡 提示: 这是内存中的当前参数" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     
     return true;
@@ -302,7 +582,7 @@ bool StorageNode::write_file_content(const std::string& filepath, const std::str
     return true;
 }
 
-bool StorageNode::file_exists(const std::string& filepath) {
+bool StorageNode::file_exists(const std::string& filepath) const {
     struct stat buffer;
     return (stat(filepath.c_str(), &buffer) == 0);
 }
@@ -841,7 +1121,7 @@ void StorageNode::print_detailed_status() {
     std::cout << "   节点 ID:      " << node_id << std::endl;
     std::cout << "   数据目录:     " << data_dir << std::endl;
     std::cout << "   端口:         " << server_port << std::endl;
-    std::cout << "   版本:         v3.2 (支持公共参数持久化)" << std::endl;
+    std::cout << "   版本:         v3.4 (改进的参数序列化)" << std::endl;
     
     std::cout << "\n📦 存储统计:" << std::endl;
     std::cout << "   文件总数:     " << file_storage.size() << std::endl;
@@ -880,4 +1160,10 @@ void StorageNode::print_detailed_status() {
     }
     
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+}
+
+// ==================== 公共参数文件检查 ====================
+
+bool StorageNode::has_public_params_file(const std::string& filepath) const {
+    return file_exists(filepath);
 }

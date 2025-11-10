@@ -41,7 +41,7 @@ struct SearchResult {
 };
 
 /**
- * StorageNode - 去中心化存储节点 (本地版 v3.2)
+ * StorageNode - 去中心化存储节点 (本地版 v3.4)
  * 
  * 特性:
  * - ✅ 完全本地化存储
@@ -50,7 +50,10 @@ struct SearchResult {
  * - ✅ 无区块链依赖
  * - ✅ 客户端公钥身份验证 (v3.1新增)
  * - ✅ 文件状态管理 (v3.1新增)
- * - ✅ 公共参数持久化 (v3.2新增)
+ * - ✅ 简化公共参数 N,g,μ (v3.2新增)
+ * - ✅ 灵活的密码学初始化 (v3.3新增)
+ * - ✅ 改进的参数序列化 element_to_bytes (v3.4新增)
+ * - ✅ 向后兼容旧格式 (v3.4新增)
  */
 class StorageNode {
 private:
@@ -86,7 +89,7 @@ private:
     // 文件系统操作
     std::string read_file_content(const std::string& filepath);
     bool write_file_content(const std::string& filepath, const std::string& content);
-    bool file_exists(const std::string& filepath);
+    bool file_exists(const std::string& filepath) const;
     bool create_directory(const std::string& dirpath);
     std::string get_current_timestamp();
     
@@ -106,10 +109,10 @@ public:
     /**
      * setup_cryptography() - 初始化密码学参数并生成公共参数
      * @param security_param 安全参数K（比特位数，如512）
-     * @param public_params_path 公共参数保存路径（可选）
+     * @param public_params_path 公共参数保存路径（可选，为空则不保存）
      * @return 成功返回true，失败返回false
      * 
-     * 生成并保存公共参数 PP = {p, q, G_1, G_2, e}
+     * 生成公共参数 PP = {N, g, μ}，其中 N = p × q
      */
     bool setup_cryptography(int security_param, 
                            const std::string& public_params_path = "");
@@ -119,18 +122,38 @@ public:
      * @param filepath 公共参数文件保存路径
      * @return 成功返回true，失败返回false
      * 
-     * 保存内容：p, q, G_1描述, G_2描述, 双线性配对e描述
+     * 保存内容：N, g, μ（只保存这三个核心参数）
      */
     bool save_public_params(const std::string& filepath);
     
     /**
-     * load_public_params() - 从JSON文件加载并显示公共参数
+     * load_public_params() - 从JSON文件加载公共参数并初始化密码学系统
      * @param filepath 公共参数文件路径
      * @return 成功返回true，失败返回false
      * 
-     * 用于验证和展示公共参数信息
+     * 功能：
+     * 1. 从JSON文件读取公共参数 (N, g, μ)
+     * 2. 在控制台显示参数信息
+     * 3. 初始化密码学系统并恢复状态
+     * 4. 设置 crypto_initialized = true
+     * 
+     * 用于：节点启动时加载已有参数，快速恢复密码学状态
      */
     bool load_public_params(const std::string& filepath);
+    
+    /**
+     * display_public_params() - 显示已加载的公共参数（只读操作）
+     * @param filepath 公共参数文件路径（可选，若为空则显示内存中的参数）
+     * @return 成功返回true，失败返回false
+     * 
+     * 功能：
+     * 1. 如果提供filepath，从JSON文件读取并显示参数信息
+     * 2. 如果filepath为空且crypto_initialized=true，显示内存中的参数
+     * 3. 纯查看功能，不会修改密码学系统状态
+     * 
+     * 用于：用户查看公共参数，不会触发重新加载
+     */
+    bool display_public_params(const std::string& filepath = "");
     
     /**
      * initialize_directories() - 初始化数据目录
@@ -307,6 +330,15 @@ public:
         return crypto_initialized;
     }
     
+    /**
+     * has_public_params_file() - 检查公共参数文件是否存在
+     * @param filepath 公共参数文件路径
+     * @return 文件存在返回true，否则返回false
+     * 
+     * 用于：在启动时检测是否已有公共参数文件，以决定是加载还是初始化
+     */
+    bool has_public_params_file(const std::string& filepath) const;
+    
     // ========== 状态显示 ==========
     
     void print_status() const {
@@ -319,7 +351,7 @@ public:
         std::cout << "文件数:       " << file_storage.size() << std::endl;
         std::cout << "索引数:       " << get_index_count() << std::endl;
         std::cout << "密码学:       " << (crypto_initialized ? "已初始化" : "未初始化") << std::endl;
-        std::cout << "版本:         v3.2 (支持公共参数持久化)" << std::endl;
+        std::cout << "版本:         v3.4 (改进的参数序列化)" << std::endl;
         std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     }
     
