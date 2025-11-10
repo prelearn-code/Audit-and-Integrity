@@ -6,11 +6,11 @@
 
 void printUsage() {
     std::cout << "\n=========================================" << std::endl;
-    std::cout << "  本地加密存储工具 v3.3" << std::endl;
+    std::cout << "  本地加密存储工具 v4.0" << std::endl;
     std::cout << "=========================================" << std::endl;
     std::cout << "\n🔧 系统设置:" << std::endl;
-    std::cout << "  1.  init           - 初始化加密系统（从JSON加载参数）" << std::endl;
-    std::cout << "  2.  keygen         - 生成密钥（需要 public_params.json）" << std::endl;
+    std::cout << "  1.  init           - 初始化系统（从 public_params.json 加载参数）" << std::endl;
+    std::cout << "  2.  keygen         - 生成密钥（需先初始化系统）" << std::endl;
     std::cout << "  3.  save-keys      - 保存密钥到文件" << std::endl;
     std::cout << "  4.  load-keys      - 从文件加载密钥" << std::endl;
     std::cout << "\n📁 文件操作:" << std::endl;
@@ -28,10 +28,38 @@ void printUsage() {
 
 void printBanner() {
     std::cout << "==================================================" << std::endl;
-    std::cout << "  🔐 本地加密存储工具 - v3.3" << std::endl;
-    std::cout << "  可验证的可搜索加密系统" << std::endl;
-    std::cout << "  ⭐ v3.3 新特性: 符合 Storage Node 接口规范" << std::endl;
+    std::cout << "  🔐 本地加密存储工具 - v4.0" << std::endl;
+    std::cout << "  可验证的可搜索加密系统（方案A重构版）" << std::endl;
+    std::cout << "  ⭐ v4.0 新特性:" << std::endl;
+    std::cout << "     - 统一使用 public_params.json" << std::endl;
+    std::cout << "     - 配对参数硬编码（Type A曲线）" << std::endl;
+    std::cout << "     - 修复参数不一致问题" << std::endl;
     std::cout << "==================================================" << std::endl;
+}
+
+void printInitializationGuide() {
+    std::cout << "\n┌─────────────────────────────────────────┐" << std::endl;
+    std::cout << "│  📘 初始化指南（重要！）                │" << std::endl;
+    std::cout << "├─────────────────────────────────────────┤" << std::endl;
+    std::cout << "│  v4.0 简化了初始化流程：                │" << std::endl;
+    std::cout << "│                                         │" << std::endl;
+    std::cout << "│  1️⃣  获取 public_params.json           │" << std::endl;
+    std::cout << "│     从 Storage Node 获取此文件          │" << std::endl;
+    std::cout << "│     包含: N, g, μ 三个公共参数          │" << std::endl;
+    std::cout << "│                                         │" << std::endl;
+    std::cout << "│  2️⃣  初始化系统                        │" << std::endl;
+    std::cout << "│     运行命令: init                      │" << std::endl;
+    std::cout << "│     系统会自动加载所有参数              │" << std::endl;
+    std::cout << "│                                         │" << std::endl;
+    std::cout << "│  3️⃣  生成密钥                          │" << std::endl;
+    std::cout << "│     运行命令: keygen                    │" << std::endl;
+    std::cout << "│     生成 private_key.dat + public_key.json │" << std::endl;
+    std::cout << "│                                         │" << std::endl;
+    std::cout << "│  ⚠️  注意事项:                          │" << std::endl;
+    std::cout << "│  - 不再需要 system_params.json         │" << std::endl;
+    std::cout << "│  - 配对参数已硬编码到程序中            │" << std::endl;
+    std::cout << "│  - 必须先 init 再 keygen               │" << std::endl;
+    std::cout << "└─────────────────────────────────────────┘\n" << std::endl;
 }
 
 int main() {
@@ -39,28 +67,21 @@ int main() {
     
     StorageClient client;
     
-    // 检查系统参数配置文件是否存在
-    std::ifstream config_check("system_params.json");
-    if (!config_check.good()) {
-        std::cout << "\n⚠️  警告: 未找到 system_params.json 配置文件" << std::endl;
-        std::cout << "   请确保配置文件存在于程序同目录下" << std::endl;
-        std::cout << "   否则初始化系统时将失败\n" << std::endl;
-    } else {
-        std::cout << "\n✅ 检测到系统参数配置文件\n" << std::endl;
-    }
-    config_check.close();
-    
-    // 检查公共参数文件（用于密钥生成）
+    // ========================================
+    // 检查 public_params.json（唯一必需的参数文件）
+    // ========================================
     std::ifstream pub_params_check("public_params.json");
     if (!pub_params_check.good()) {
-        std::cout << "⚠️  警告: 未找到 public_params.json 文件" << std::endl;
-        std::cout << "   此文件由 Storage Node 生成，用于生成密钥" << std::endl;
-        std::cout << "   如需生成密钥，请先从 Storage Node 获取此文件\n" << std::endl;
+        std::cout << "\n⚠️  警告: 未找到 public_params.json 文件" << std::endl;
+        std::cout << "   此文件由 Storage Node 生成，包含系统公共参数" << std::endl;
+        std::cout << "   如需初始化系统，请先从 Storage Node 获取此文件\n" << std::endl;
     } else {
-        std::cout << "✅ 检测到公共参数文件（可以生成密钥）\n" << std::endl;
+        std::cout << "\n✅ 检测到 public_params.json" << std::endl;
+        std::cout << "   您可以运行 'init' 命令初始化系统\n" << std::endl;
     }
     pub_params_check.close();
     
+    printInitializationGuide();
     printUsage();
     
     std::string command;
@@ -73,22 +94,9 @@ int main() {
         try {
             if (command == "init" || command == "1") {
                 std::cout << "\n⚙️  初始化加密系统..." << std::endl;
-                std::cout << "📄 使用配置文件: system_params.json" << std::endl;
-                std::cout << "💡 提示: 请确保配置文件在程序同目录下\n" << std::endl;
-                
-                if (client.initialize()) {
-                    std::cout << "✅ 系统初始化成功" << std::endl;
-                } else {
-                    std::cerr << "❌ 系统初始化失败" << std::endl;
-                    std::cerr << "💡 请检查 system_params.json 文件是否存在且格式正确" << std::endl;
-                }
-            }
-            else if (command == "keygen" || command == "2") {
-                std::cout << "\n🔑 生成密钥..." << std::endl;
-                std::cout << "📄 从 public_params.json 读取公共参数..." << std::endl;
                 
                 std::string pub_params_file;
-                std::cout << "💡 输入公共参数文件路径（按回车使用默认: public_params.json）: ";
+                std::cout << "💡 输入 public_params.json 路径（按回车使用默认: public_params.json）: ";
                 std::cin.ignore();
                 std::getline(std::cin, pub_params_file);
                 
@@ -96,14 +104,35 @@ int main() {
                     pub_params_file = "public_params.json";
                 }
                 
-                if (client.generateKeys(pub_params_file)) {
-                    std::cout << "✅ 密钥生成成功" << std::endl;
-                    std::cout << "📌 公钥已保存到: public_key.json" << std::endl;
-                    std::cout << "🔐 私钥已保存到: private_key.dat" << std::endl;
-                    std::cout << "⚠️  请妥善保管私钥文件！" << std::endl;
+                std::cout << "\n📄 从 " << pub_params_file << " 加载公共参数..." << std::endl;
+                std::cout << "🔧 配对参数: Type A 曲线（硬编码）" << std::endl;
+                std::cout << "📊 公共参数: N, g, μ（从文件加载）\n" << std::endl;
+                
+                if (client.initialize(pub_params_file)) {
+                    std::cout << "\n✅ 系统初始化成功" << std::endl;
+                    std::cout << "💡 下一步: 运行 'keygen' 生成密钥" << std::endl;
                 } else {
-                    std::cerr << "❌ 密钥生成失败" << std::endl;
-                    std::cerr << "💡 请确保 " << pub_params_file << " 存在且格式正确" << std::endl;
+                    std::cerr << "\n❌ 系统初始化失败" << std::endl;
+                    std::cerr << "💡 请检查:" << std::endl;
+                    std::cerr << "   1. " << pub_params_file << " 文件是否存在" << std::endl;
+                    std::cerr << "   2. 文件格式是否正确（需包含 N, g, mu）" << std::endl;
+                }
+            }
+            else if (command == "keygen" || command == "2") {
+                std::cout << "\n🔑 生成密钥..." << std::endl;
+                std::cout << "⚠️  注意: 如果系统尚未初始化，此操作将失败\n" << std::endl;
+                
+                if (client.generateKeys()) {
+                    std::cout << "\n✅ 密钥生成成功" << std::endl;
+                    std::cout << "📌 生成的文件:" << std::endl;
+                    std::cout << "   - private_key.dat（私钥，请妥善保管）" << std::endl;
+                    std::cout << "   - public_key.json（公钥）" << std::endl;
+                    std::cout << "\n💡 现在可以使用 'encrypt' 命令加密文件" << std::endl;
+                } else {
+                    std::cerr << "\n❌ 密钥生成失败" << std::endl;
+                    std::cerr << "💡 可能的原因:" << std::endl;
+                    std::cerr << "   1. 系统尚未初始化（请先运行 'init'）" << std::endl;
+                    std::cerr << "   2. 配对参数未正确加载" << std::endl;
                 }
             }
             else if (command == "save-keys" || command == "3") {
@@ -112,7 +141,7 @@ int main() {
                 std::cin >> key_file;
                 
                 if (client.saveKeys(key_file)) {
-                    std::cout << "✅ 密钥保存成功" << std::endl;
+                    std::cout << "✅ 密钥保存成功: " << key_file << std::endl;
                 } else {
                     std::cerr << "❌ 密钥保存失败" << std::endl;
                 }
@@ -122,10 +151,16 @@ int main() {
                 std::cout << "\n📂 输入密钥文件路径: ";
                 std::cin >> key_file;
                 
+                std::cout << "\n💡 提示: 加载密钥前必须先初始化系统" << std::endl;
+                std::cout << "   如果看到错误，请先运行 'init' 命令\n" << std::endl;
+                
                 if (client.loadKeys(key_file)) {
-                    std::cout << "✅ 密钥加载成功" << std::endl;
+                    std::cout << "✅ 密钥加载成功: " << key_file << std::endl;
                 } else {
                     std::cerr << "❌ 密钥加载失败" << std::endl;
+                    std::cerr << "💡 请确保:" << std::endl;
+                    std::cerr << "   1. 已初始化系统（运行 'init'）" << std::endl;
+                    std::cerr << "   2. 密钥文件存在且格式正确" << std::endl;
                 }
             }
             else if (command == "encrypt" || command == "5") {
@@ -142,7 +177,6 @@ int main() {
                 std::stringstream ss(keywords_str);
                 std::string keyword;
                 while (std::getline(ss, keyword, ',')) {
-                    // 去除首尾空格
                     keyword.erase(0, keyword.find_first_not_of(" \t"));
                     keyword.erase(keyword.find_last_not_of(" \t") + 1);
                     if (!keyword.empty()) {
@@ -168,10 +202,12 @@ int main() {
                     insert_json_path = "insert.json";
                 }
                 
-                std::cout << "\n🔐 加密中..." << std::endl;
                 if (client.encryptFile(file_path, keywords, output_prefix, insert_json_path)) {
                     std::cout << "\n✅ 加密完成！" << std::endl;
-                    std::cout << "💡 可以将 " << insert_json_path << " 发送给 Storage Node" << std::endl;
+                    std::cout << "📦 生成的文件:" << std::endl;
+                    std::cout << "   - " << output_prefix << ".enc（加密文件）" << std::endl;
+                    std::cout << "   - " << insert_json_path << "（供 Storage Node 使用）" << std::endl;
+                    std::cout << "   - " << file_path << "_metadata.json（本地元数据）" << std::endl;
                 } else {
                     std::cerr << "❌ 文件加密失败" << std::endl;
                 }
@@ -185,9 +221,8 @@ int main() {
                 std::cout << "💾 输出文件路径: ";
                 std::cin >> output_path;
                 
-                std::cout << "\n🔓 解密中..." << std::endl;
                 if (client.decryptFile(encrypted_file, output_path)) {
-                    std::cout << "✅ 解密成功！" << std::endl;
+                    std::cout << "✅ 解密成功: " << output_path << std::endl;
                 } else {
                     std::cerr << "❌ 文件解密失败" << std::endl;
                 }
@@ -198,10 +233,8 @@ int main() {
                 std::cout << "\n📂 输入状态文件路径: ";
                 std::cin >> state_file;
                 
-                std::cout << "\n📥 加载关键词状态..." << std::endl;
                 if (client.loadKeywordStates(state_file)) {
                     std::cout << "✅ 状态文件加载成功" << std::endl;
-                    std::cout << "💡 提示: 加密文件时会自动更新此状态文件" << std::endl;
                 } else {
                     std::cerr << "❌ 状态文件加载失败" << std::endl;
                 }
@@ -211,7 +244,6 @@ int main() {
                 std::cout << "\n💾 输入保存路径: ";
                 std::cin >> state_file;
                 
-                std::cout << "\n💾 保存关键词状态..." << std::endl;
                 if (client.saveKeywordStates(state_file)) {
                     std::cout << "✅ 状态文件保存成功: " << state_file << std::endl;
                 } else {
@@ -230,7 +262,7 @@ int main() {
                 printUsage();
             }
             else if (command == "quit" || command == "exit" || command == "14") {
-                std::cout << "\n👋 感谢使用本地加密存储工具！" << std::endl;
+                std::cout << "\n👋 感谢使用本地加密存储工具 v4.0！" << std::endl;
                 std::cout << "   记得保存您的密钥文件和状态文件。\n" << std::endl;
                 running = false;
             }
