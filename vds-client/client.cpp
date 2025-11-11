@@ -46,7 +46,8 @@ bool StorageClient::initialize(const std::string& public_params_file) {
     // 这是标准的1024位安全级别参数，公开且固定
     // ⚠️ 必须与 Storage Node 保持完全一致
     const char* PAIRING_PARAMS = 
-        "type a\n"
+        "type a\n" // 类型
+        //大素数
         "q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791\n"
         "h 12016012264891146079388821366740534204802954401251311822919615131047207289359704531102844802183906537786776\n"
         "r 730750818665451621361119245571504901405976559617\n"
@@ -441,10 +442,6 @@ bool StorageClient::encryptFile(const std::string& file_path,
     }
     std::cout << "[加密] 文件大小: " << plaintext.size() << " 字节" << std::endl;
     
-    // 生成文件ID
-    std::string file_id = computeHashH3(file_path + getCurrentTimestamp());
-    std::cout << "[加密] 文件ID: " << file_id << std::endl;
-    
     // 加密文件数据
     std::vector<unsigned char> ciphertext;
     if (!encryptFileData(plaintext, ciphertext)) {
@@ -452,6 +449,17 @@ bool StorageClient::encryptFile(const std::string& file_path,
         return false;
     }
     std::cout << "[加密] 密文大小: " << ciphertext.size() << " 字节" << std::endl;
+    
+    // 使用密文计算文件ID
+    mpz_t file_id_int;
+    mpz_init(file_id_int);
+    std::string ciphertext_str(ciphertext.begin(), ciphertext.end());
+    computeHashH1(ciphertext_str, file_id_int);
+    char* file_id_cstr = mpz_get_str(nullptr, 10, file_id_int);
+    std::string file_id(file_id_cstr);
+    free(file_id_cstr);
+    mpz_clear(file_id_int);
+    std::cout << "[加密] 文件ID (H1(C)): " << file_id.substr(0, 32) << "..." << std::endl;
     
     // 保存加密文件
     std::string enc_file = output_prefix + ".enc";
@@ -468,55 +476,61 @@ bool StorageClient::encryptFile(const std::string& file_path,
     }
     std::cout << "[加密] 认证标签数量: " << auth_tags.size() << std::endl;
     
-    // 处理关键词
+    // ========== 修改：关键词数据处理 ==========
     Json::Value keywords_data(Json::arrayValue);
     for (const auto& keyword : keywords) {
         Json::Value kw_obj;
         
-        // 生成搜索令牌
-        std::string Ti = encryptKeyword(keyword);
-        kw_obj["Ti"] = Ti;
+        // 步骤 1：生成原始搜索令牌 Ti
+        std::string Ti = generateSearchToken(keyword);
         
-        // 获取或生成状态
+        // 步骤 2：获取前一个状态（用于 kt 计算）
         std::string previous_state;
-        std::string current_state;
-        
         auto it = keyword_states_.find(keyword);
         if (it != keyword_states_.end()) {
             previous_state = it->second;
         }
         
-        current_state = generateRandomState();
+        // 步骤 3：生成新的最新状态 st_d
+        std::string new_state = generateRandomState();
         
-        // 生成状态关联令牌
+        // 步骤 4：生成状态关联令牌 T̄ᵢ = H₂(Ti||st_d)
+        std::string Ti_bar = generateStateAssociatedToken(Ti, new_state);
+        
+        // 步骤 5：将 T̄ᵢ 写入
+        kw_obj["Ti_bar"] = Ti_bar;  // 存储的是状态关联后的令牌
+        
+        // 步骤 6：生成关键词关联标签 kt
         std::string kt;
-        if (!generateStateAssociatedToken(file_id, Ti, current_state, previous_state, kt)) {
+        if (!generateKeywordAssociatedTag(file_id, Ti, new_state, previous_state, kt)) {
             std::cerr << "[错误] 状态关联令牌生成失败" << std::endl;
             return false;
         }
-        
-        kw_obj["kt"] = kt;
-        
-        // 加密指针
-        std::string ptr = encryptPointer(previous_state, computeHashH3(current_state));
-        kw_obj["ptr"] = ptr;
+        kw_obj["kt_i"] = kt;
         
         keywords_data.append(kw_obj);
         
-        // 更新状态
-        updateKeywordState(keyword, current_state, file_id);
+        // 步骤 7：更新状态存储
+        updateKeywordState(keyword, new_state, file_id);
     }
     
-    // 生成insert.json
+    // 构建 insert.json
     Json::Value insert_json;
-    insert_json["file_id"] = file_id;
-    insert_json["keywords"] = keywords_data;
-    insert_json["auth_tags"] = Json::Value(Json::arrayValue);
-    for (const auto& tag : auth_tags) {
-        insert_json["auth_tags"].append(tag);
-    }
-    insert_json["timestamp"] = getCurrentTimestamp();
+    insert_json["PK"] = getPublicKey();
+    insert_json["ID_F"] = file_id;
+    insert_json["ptr"] = enc_file;
     
+    // TS_F：使用JSON数组存储所有认证标签
+    Json::Value ts_f_array(Json::arrayValue);
+    for (const auto& tag : auth_tags) {
+        ts_f_array.append(tag);
+    }
+    insert_json["TS_F"] = ts_f_array;
+    
+    insert_json["state"] = "valid";
+    insert_json["keywords"] = keywords_data;
+    
+    // 保存 insert.json
     std::ofstream insert_file(insert_json_path);
     if (!insert_file.is_open()) {
         std::cerr << "[错误] 无法创建 " << insert_json_path << std::endl;
@@ -551,7 +565,6 @@ bool StorageClient::encryptFile(const std::string& file_path,
     std::cout << "[完成] 文件加密成功" << std::endl;
     return true;
 }
-
 // ============================================================================
 // 文件解密功能
 // ============================================================================
@@ -702,7 +715,7 @@ bool StorageClient::generateAuthTags(const std::string& file_id,
     // 将密文分块
     auto blocks = splitIntoBlocks(ciphertext, BLOCK_SIZE);
     auth_tags.clear();
-    
+    // 首先给密文分成BLOCK_SIZE块
     for (size_t i = 0; i < blocks.size(); ++i) {
         // σ_i = [H_2(ID_F||i) * ∏_{j=1}^s μ^{c_{i,j}}]^sk
         
@@ -719,7 +732,7 @@ bool StorageClient::generateAuthTags(const std::string& file_id,
         
         // 计算 ∏_{j=1}^s μ^{c_{i,j}}
         auto sectors = splitIntoBlocks(blocks[i], SECTOR_SIZE);
-        
+        // 分为扇区
         for (size_t j = 0; j < sectors.size(); ++j) {
             // 将扇区数据转换为整数
             mpz_t c_ij;
@@ -757,7 +770,7 @@ bool StorageClient::generateAuthTags(const std::string& file_id,
 // 密码学操作 - 状态关联令牌生成
 // ============================================================================
 
-bool StorageClient::generateStateAssociatedToken(const std::string& file_id,
+bool StorageClient::generateKeywordAssociatedTag(const std::string& file_id,
                                                 const std::string& Ti,
                                                 const std::string& current_state,
                                                 const std::string& previous_state,
@@ -845,24 +858,46 @@ std::string StorageClient::computeHashH3(const std::string& input) {
     return oss.str();
 }
 
-std::string StorageClient::encryptKeyword(const std::string& keyword) {
-    // Ti = H3(H1(mk || keyword))
-    std::string mk_str(reinterpret_cast<const char*>(mk_), 32);
+std::string StorageClient::generateSearchToken(const std::string& keyword) {
+    // T_i = SE.Enc(mk, w_i) - 使用对称加密（AES-256-ECB）
     
-    mpz_t h1_result;
-    mpz_init(h1_result);
-    computeHashH1(mk_str + keyword, h1_result);
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        std::cerr << "[错误] 加密上下文创建失败" << std::endl;
+        return "";
+    }
     
-    // 将H1结果转换为字符串
-    size_t h1_size = (mpz_sizeinbase(h1_result, 2) + 7) / 8;
-    std::vector<unsigned char> h1_buf(h1_size);
-    mpz_export(h1_buf.data(), nullptr, 1, 1, 0, 0, h1_result);
+    // 使用主密钥mk进行AES加密
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_ecb(), nullptr, mk_, nullptr) != 1) {
+        std::cerr << "[错误] 加密初始化失败" << std::endl;
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
     
-    std::string h1_str(h1_buf.begin(), h1_buf.end());
-    std::string Ti = computeHashH3(h1_str);
+    // 准备明文（关键词）
+    std::vector<unsigned char> plaintext(keyword.begin(), keyword.end());
+    std::vector<unsigned char> ciphertext(plaintext.size() + EVP_CIPHER_block_size(EVP_aes_256_ecb()));
     
-    mpz_clear(h1_result);
-    return Ti;
+    int len = 0;
+    if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len, plaintext.data(), plaintext.size()) != 1) {
+        std::cerr << "[错误] 加密更新失败" << std::endl;
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    
+    int ciphertext_len = len;
+    if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
+        std::cerr << "[错误] 加密finalize失败" << std::endl;
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    ciphertext_len += len;
+    
+    ciphertext.resize(ciphertext_len);
+    EVP_CIPHER_CTX_free(ctx);
+    
+    // 转换为十六进制字符串返回
+    return bytesToHex(ciphertext);
 }
 
 std::string StorageClient::generateRandomState() {
@@ -923,6 +958,28 @@ std::string StorageClient::encryptPointer(const std::string& previous_state,
     EVP_CIPHER_CTX_free(ctx);
     
     return bytesToHex(ciphertext);
+}
+std::string StorageClient::generateStateAssociatedToken(
+    const std::string& Ti, 
+    const std::string& st_d) 
+{
+    // 步骤 1：拼接 Ti 和 st_d
+    std::string concatenated = Ti + st_d;
+    
+    // 步骤 2：初始化 G₁ 群元素
+    element_t hash_result;
+    element_init_G1(hash_result, pairing_);
+    
+    // 步骤 3：使用 H₂ 哈希到 G₁ 群
+    computeHashH2(concatenated, hash_result);
+    
+    // 步骤 4：序列化为十六进制字符串
+    std::string Ti_bar = serializeElement(hash_result);
+    
+    // 步骤 5：清理资源
+    element_clear(hash_result);
+    
+    return Ti_bar;
 }
 
 // ============================================================================

@@ -30,7 +30,7 @@ struct FileData {
     std::string file_id;         // 文件ID (ID_F)
     std::string ciphertext;      // 加密文本
     std::string pointer;         // 文件指针 (ptr)
-    std::string file_auth_tag;   // 文件认证标签 (TS_F)
+    std::vector<std::string> file_auth_tags;   // 文件认证标签 (TS_F)
     std::string state;           // 状态: "valid" 或 "invalid" (新增)
 };
 

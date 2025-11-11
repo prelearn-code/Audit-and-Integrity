@@ -872,14 +872,14 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     // 处理关键词索引
     int keyword_count = 0;
     for (const auto& kw : params["keywords"]) {
-        if (!kw.isMember("T_i") || !kw.isMember("kt_i")) {
+        if (!kw.isMember("Ti_bar") || !kw.isMember("kt_i")) {
             std::cerr << "⚠️  关键词格式错误,跳过" << std::endl;
             continue;
         }
         
         IndexEntry entry;
         entry.PK = PK;
-        entry.Ts = kw["T_i"].asString();
+        entry.Ts = kw["Ti_bar"].asString();
         entry.keyword = kw["kt_i"].asString();
         entry.pointer = ptr;
         entry.file_identifier = file_id;

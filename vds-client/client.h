@@ -197,11 +197,13 @@ private:
      * - 有前一状态: kt^{w_i} = [H_2(ID_F) * H_2(st_d||Ti) / H_2(st_{d-1}||Ti)]^{sk}
      * - 无前一状态: kt^{w_i} = [H_2(ID_F) * H_2(st_d||Ti)]^{sk}
      */
-    bool generateStateAssociatedToken(const std::string& file_id,
+    bool generateKeywordAssociatedTag(const std::string& file_id,
                                       const std::string& Ti,
                                       const std::string& current_state,
                                       const std::string& previous_state,
                                       std::string& kt_output);
+    
+    std::string generateStateAssociatedToken(const std::string& Ti, const std::string& st_d);
     
     // ============ 哈希函数 ============
     
@@ -221,11 +223,13 @@ private:
     std::string computeHashH3(const std::string& input);
     
     /**
-     * @brief 加密关键词
-     * @param keyword 关键词
-     * @return 搜索令牌 Ti = H3(H1(mk || keyword))
-     */
-    std::string encryptKeyword(const std::string& keyword);
+    * @brief 生成搜索令牌
+    * @param keyword 关键词
+    * @return 搜索令牌 Ti = SE.Enc(mk, w_i)（使用AES-256-ECB加密）
+    */
+    std::string generateSearchToken(const std::string& keyword);
+
+
     
     /**
      * @brief 生成随机状态值
