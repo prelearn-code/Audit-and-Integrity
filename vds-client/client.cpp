@@ -493,6 +493,11 @@ bool StorageClient::encryptFile(const std::string& file_path,
         
         // 步骤 3：生成新的最新状态 st_d
         std::string new_state = generateRandomState();
+
+        // 计算状态链
+        std::string ptr;
+        ptr = encryptPointer(compute_hash_H3(new_state),previous_state)
+        kw_obj["ptr_i"] = ptr;
         
         // 步骤 4：生成状态关联令牌 T̄ᵢ = H₂(Ti||st_d)
         std::string Ti_bar = generateStateAssociatedToken(Ti, new_state);
@@ -506,7 +511,7 @@ bool StorageClient::encryptFile(const std::string& file_path,
             std::cerr << "[错误] 状态关联令牌生成失败" << std::endl;
             return false;
         }
-        kw_obj["kt_i"] = kt;
+        kw_obj["kt_wi"] = kt;
         
         keywords_data.append(kw_obj);
         

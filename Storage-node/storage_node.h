@@ -17,25 +17,31 @@
 #include <json/json.h>
 
 struct IndexEntry {
+    // 
     std::string PK;              // 客户端公钥 (新增)
-    std::string Ts;              // 状态令牌 (T_i)
-    std::string keyword;         // 关键词 (kt_i)
-    std::string pointer;         // 加密指针
-    std::string file_identifier; // 文件标识符 (ID_F)
+    std::vector<std::string> TS_F;   // 文件认证标签集合,与file_auth_tags相同。
+    std::string Ti_bar;         // 状态关联的Token
+    std::string ptr;         // 加密指针
+    std::string ID_F; // 文件标识符 (ID_F)
     std::string state;           // 状态: "valid" 或 "invalid" (修改为string)
+    std::string kt_wi;           //关键词关联标签。
+    std::string file_path;       //文件的本地存储位置
 };
 
 struct FileData {
     std::string PK;              // 客户端公钥 (新增)
-    std::string file_id;         // 文件ID (ID_F)
-    std::string ciphertext;      // 加密文本
-    std::string pointer;         // 文件指针 (ptr)
-    std::vector<std::string> file_auth_tags;   // 文件认证标签 (TS_F)
-    std::string state;           // 状态: "valid" 或 "invalid" (新增)
+    std::string ID_F;         // 文件ID (ID_F)
+    std::string C;           // 加密文本
+    std::string ptr;         // 文件指针 (ptr)
+    std::vector<std::string> TS_F;   // 文件认证标签 (TS_F)
+    std::string state;           // 状态: "valid" 或 "invalid" 
+    // 其中Ti_bars对应kt_wis,一一对应。
+    std::vector<std::string> Ti_bars; //关键词对应的状态关联的Token集合
+    std::vector<std::string> kt_wis; //关键词关联标签集合
 };
 
 struct SearchResult {
-    std::vector<std::string> file_identifiers;
+    std::vector<std::string> ID_F;
     std::vector<std::string> keyword_proofs;
     std::string aggregated_proof;
 };
