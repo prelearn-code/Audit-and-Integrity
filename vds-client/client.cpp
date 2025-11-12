@@ -496,7 +496,7 @@ bool StorageClient::encryptFile(const std::string& file_path,
 
         // 计算状态链
         std::string ptr;
-        ptr = encryptPointer(compute_hash_H3(new_state),previous_state)
+        ptr = encryptPointer(compute_hash_H3(new_state),previous_state);
         kw_obj["ptr_i"] = ptr;
         
         // 步骤 4：生成状态关联令牌 T̄ᵢ = H₂(Ti||st_d)
