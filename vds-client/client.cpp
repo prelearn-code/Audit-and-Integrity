@@ -616,7 +616,7 @@ bool StorageClient::encryptFile(const std::string& file_path,
         // 生成搜索令牌
         std::string Ti = generateSearchToken(keyword);
         
-        // 获取前一个状态
+        // 获取前一个状态的最新状态，通过map映射
         std::string previous_state;
         auto it = keyword_states_.find(keyword);
         if (it != keyword_states_.end()) {
@@ -626,7 +626,9 @@ bool StorageClient::encryptFile(const std::string& file_path,
         // 生成新状态
         std::string new_state = generateRandomState();
         
+        if(previous_state == "")  previous_state=new_state;
         // 计算状态链ptr
+        
         std::string ptr = encryptPointer(computeHashH3(new_state), previous_state);
         kw_obj["ptr_i"] = ptr;
         
