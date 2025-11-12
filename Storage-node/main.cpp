@@ -74,10 +74,12 @@ void handle_insert_file(StorageNode* node) {
     std::cout << "\n💡 提示: JSON参数文件应包含以下字段:" << std::endl;
     std::cout << "   - PK: 客户端公钥" << std::endl;
     std::cout << "   - ID_F: 文件唯一标识" << std::endl;
-    std::cout << "   - ptr: 文件指针" << std::endl;
-    std::cout << "   - TS_F: 文件认证标签" << std::endl;
+    std::cout << "   - TS_F: 文件认证标签数组" << std::endl;
     std::cout << "   - state: 文件状态 (valid/invalid)" << std::endl;
-    std::cout << "   - keywords: 关键词数组 [{'T_i': '...', 'kt_i': '...'}]" << std::endl;
+    std::cout << "   - keywords: 关键词数组" << std::endl;
+    std::cout << "       └─ Ti_bar: 状态令牌（必需）" << std::endl;
+    std::cout << "       └─ kt_wi: 关键词标签（必需）" << std::endl;
+    std::cout << "       └─ ptr_i: 指针（可选）" << std::endl;
     
     std::cout << "\n请输入参数JSON文件路径: ";
     clear_input_buffer();
@@ -100,7 +102,7 @@ void handle_search_keyword(StorageNode* node) {
     std::cout << "🔍 搜索关键词" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     
-    std::string pk, search_token, latest_state, seed;
+    std::string pk, search_token, latest_state;
     
     std::cout << "\n请输入客户端公钥 (PK): ";
     clear_input_buffer();
@@ -112,18 +114,16 @@ void handle_search_keyword(StorageNode* node) {
     std::cout << "请输入最新状态 (可选): ";
     std::getline(std::cin, latest_state);
     
-    std::cout << "请输入种子 (可选): ";
-    std::getline(std::cin, seed);
-    
-    SearchResult result = node->search_keyword(pk, search_token, latest_state, seed);
+    // 修改：删除了 seed 参数的输入
+    SearchResult result = node->search_keyword(pk, search_token, latest_state);
     
     std::cout << "\n📊 搜索结果:" << std::endl;
-    std::cout << "   找到 " << result.file_identifiers.size() << " 个匹配文件" << std::endl;
+    std::cout << "   找到 " << result.ID_F.size() << " 个匹配文件" << std::endl;
     
-    if (!result.file_identifiers.empty()) {
+    if (!result.ID_F.empty()) {
         std::cout << "\n📄 文件列表:" << std::endl;
-        for (size_t i = 0; i < result.file_identifiers.size(); ++i) {
-            std::cout << "   [" << (i+1) << "] " << result.file_identifiers[i];
+        for (size_t i = 0; i < result.ID_F.size(); ++i) {
+            std::cout << "   [" << (i+1) << "] " << result.ID_F[i];
             if (i < result.keyword_proofs.size()) {
                 std::cout << " (关键词: " << result.keyword_proofs[i] << ")";
             }
@@ -235,34 +235,16 @@ void handle_generate_proof(StorageNode* node) {
     clear_input_buffer();
     std::getline(std::cin, file_id);
     
-    std::cout << "请输入种子 (可选): ";
+    std::cout << "请输入种子: ";
     std::getline(std::cin, seed);
     
     std::string proof = node->generate_integrity_proof(file_id, seed);
     
     if (!proof.empty()) {
-        std::cout << "\n✅ 完整性证明生成成功!" << std::endl;
-        std::cout << "   证明: " << proof << std::endl;
-        
-        char save_choice;
-        std::cout << "\n是否保存证明到文件? (y/n): ";
-        std::cin >> save_choice;
-        
-        if (save_choice == 'y' || save_choice == 'Y') {
-            std::string output_path;
-            std::cout << "输出文件路径: ";
-            clear_input_buffer();
-            std::getline(std::cin, output_path);
-            
-            std::ofstream outfile(output_path);
-            if (outfile.is_open()) {
-                outfile << proof;
-                outfile.close();
-                std::cout << "✅ 证明已保存到: " << output_path << std::endl;
-            }
-        }
+        std::cout << "\n✅ 完整性证明已生成!" << std::endl;
+        std::cout << "   证明: " << proof.substr(0, 64) << "..." << std::endl;
     } else {
-        std::cout << "\n❌ 文件不存在或证明生成失败!" << std::endl;
+        std::cout << "\n❌ 证明生成失败!" << std::endl;
     }
     
     wait_for_enter();
@@ -275,37 +257,19 @@ void handle_view_status(StorageNode* node) {
 
 void handle_list_files(StorageNode* node) {
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
-    std::cout << "📋 所有文件列表" << std::endl;
+    std::cout << "📋 文件列表" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     
-    std::vector<std::string> files = node->list_all_files();
+    auto files = node->list_all_files();
     
     if (files.empty()) {
-        std::cout << "\n⚠️  当前没有存储任何文件" << std::endl;
+        std::cout << "\n⚠️  暂无文件" << std::endl;
     } else {
-        std::cout << "\n📄 共有 " << files.size() << " 个文件:\n" << std::endl;
-        
-        for (size_t i = 0; i < files.size(); ++i) {
-            std::cout << "   [" << (i+1) << "] " << files[i] << std::endl;
-            
-            // 显示元数据
-            Json::Value metadata = node->get_file_metadata(files[i]);
-            if (metadata.isMember("PK")) {
-                std::cout << "       PK: " << metadata["PK"].asString().substr(0, 16) << "...";
-            }
-            if (metadata.isMember("file_size")) {
-                std::cout << ", 大小: " << metadata["file_size"].asInt() << " 字节";
-            }
-            if (metadata.isMember("keyword_count")) {
-                std::cout << ", 关键词: " << metadata["keyword_count"].asInt();
-            }
-            if (metadata.isMember("state")) {
-                std::cout << ", 状态: " << metadata["state"].asString();
-            }
-            if (metadata.isMember("insert_time")) {
-                std::cout << ", 插入时间: " << metadata["insert_time"].asString();
-            }
-            std::cout << std::endl;
+        std::cout << "\n共有 " << files.size() << " 个文件:\n" << std::endl;
+        int count = 0;
+        for (const auto& file_id : files) {
+            count++;
+            std::cout << "   [" << count << "] " << file_id << std::endl;
         }
     }
     
@@ -323,11 +287,12 @@ void handle_export_metadata(StorageNode* node) {
     clear_input_buffer();
     std::getline(std::cin, file_id);
     
-    std::cout << "请输入输出文件路径: ";
+    std::cout << "请输入输出路径: ";
     std::getline(std::cin, output_path);
     
     if (node->export_file_metadata(file_id, output_path)) {
-        std::cout << "\n✅ 元数据已导出到: " << output_path << std::endl;
+        std::cout << "\n✅ 元数据导出成功!" << std::endl;
+        std::cout << "   保存位置: " << output_path << std::endl;
     } else {
         std::cout << "\n❌ 导出失败!" << std::endl;
     }
@@ -340,120 +305,44 @@ void handle_detailed_status(StorageNode* node) {
     wait_for_enter();
 }
 
-void handle_view_public_params(StorageNode* node) {
-    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
-    std::cout << "🔑 查看公共参数" << std::endl;
-    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
-    
-    std::string default_path = node->get_data_dir() + "/public_params.json";
-    
-    std::cout << "\n📝 查看选项:" << std::endl;
-    std::cout << "   1. 查看文件中的参数 (不修改系统状态)" << std::endl;
-    std::cout << "   2. 查看内存中的参数 (当前已加载的)" << std::endl;
-    std::cout << "\n请选择 [1/2] (直接回车默认查看文件): ";
-    
-    std::string choice;
-    clear_input_buffer();
-    std::getline(std::cin, choice);
-    
-    if (choice.empty()) {
-        choice = "1";
-    }
-    
-    if (choice == "1") {
-        // 查看文件中的参数
-        std::cout << "\n默认路径: " << default_path << std::endl;
-        std::cout << "请输入查看路径（直接回车使用默认路径）: ";
-        
-        std::string path;
-        std::getline(std::cin, path);
-        
-        if (path.empty()) {
-            path = default_path;
-        }
-        
-        if (!node->display_public_params(path)) {
-            std::cerr << "\n❌ 无法查看公共参数文件" << std::endl;
-            std::cerr << "💡 可能的原因:" << std::endl;
-            std::cerr << "   - 文件不存在" << std::endl;
-            std::cerr << "   - 文件格式错误" << std::endl;
-            std::cerr << "\n💡 提示: 如果是首次使用，请先:" << std::endl;
-            std::cerr << "   1. 选择 '1. 初始化密码学系统'" << std::endl;
-            std::cerr << "   2. 选择 '2. 保存公共参数'" << std::endl;
-        }
-    } else if (choice == "2") {
-        // 查看内存中的参数
-        if (!node->display_public_params("")) {
-            std::cerr << "\n💡 提示:" << std::endl;
-            std::cerr << "   密码学系统未初始化，请先加载或初始化公共参数" << std::endl;
-        }
-    } else {
-        std::cout << "❌ 无效选择" << std::endl;
-    }
-    
-    wait_for_enter();
-}
-
 void handle_init_crypto(StorageNode* node) {
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     std::cout << "🔧 初始化密码学系统" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     
-    if (node->is_crypto_initialized()) {
-        std::cout << "⚠️  密码学系统已初始化" << std::endl;
-        std::cout << "    是否重新初始化? (将生成新的公共参数) (y/n): ";
-        std::string confirm;
-        clear_input_buffer();
-        std::getline(std::cin, confirm);
-        if (confirm != "y" && confirm != "Y") {
-            std::cout << "❌ 操作已取消" << std::endl;
-            wait_for_enter();
-            return;
-        }
-        std::cout << "\n⚠️  注意: 重新初始化将生成新的 g 和 μ 参数" << std::endl;
-        std::cout << "    建议先备份现有公共参数文件" << std::endl;
+    std::cout << "\n📝 配置参数:" << std::endl;
+    std::cout << "   - 安全参数: 512 bits (固定)" << std::endl;
+    std::cout << "   - 配对类型: Type A pairing" << std::endl;
+    std::cout << "   - 群: G1 = G2 (对称配对)" << std::endl;
+    
+    std::cout << "\n💡 操作说明:" << std::endl;
+    std::cout << "   1. 生成公共参数 PP = {N, g, μ}" << std::endl;
+    std::cout << "   2. 可选择是否立即保存参数" << std::endl;
+    
+    char auto_save;
+    std::cout << "\n是否在初始化后自动保存公共参数? (y/n): ";
+    std::cin >> auto_save;
+    
+    std::string save_path;
+    if (auto_save == 'y' || auto_save == 'Y') {
+        save_path = node->get_data_dir() + "/public_params.json";
     }
     
-    std::cout << "\n📝 安全参数配置" << std::endl;
-    std::cout << "   安全参数 K 决定了密码学系统的安全强度" << std::endl;
-    std::cout << "   推荐范围: 128-2048 bits" << std::endl;
-    std::cout << "   默认值: 512 bits (适合大多数应用)" << std::endl;
-    
-    std::cout << "\n请输入安全参数 K (直接回车使用默认 512): ";
-    std::string input;
-    clear_input_buffer();
-    std::getline(std::cin, input);
-    
-    int K = 512;
-    if (!input.empty()) {
-        try {
-            K = std::stoi(input);
-            if (K < 128 || K > 2048) {
-                std::cout << "⚠️  参数超出推荐范围 (128-2048)，使用默认值 512" << std::endl;
-                K = 512;
-            }
-        } catch (...) {
-            std::cout << "⚠️  输入无效，使用默认值 512" << std::endl;
-            K = 512;
-        }
-    }
-    
-    std::cout << "\n配置信息:" << std::endl;
-    std::cout << "   安全参数 K = " << K << " bits" << std::endl;
     std::cout << "\n⏳ 正在初始化密码学系统..." << std::endl;
-    std::cout << "   - 初始化配对参数 (Type A pairing)" << std::endl;
-    std::cout << "   - 生成随机元素 g, μ ∈ G1" << std::endl;
+    std::cout << "   - 初始化配对参数" << std::endl;
+    std::cout << "   - 生成群元素 g, μ" << std::endl;
     std::cout << "   - 计算 N = p × q" << std::endl;
     
-    // 调用setup_cryptography，不自动保存
-    if (node->setup_cryptography(K, "")) {
+    if (node->setup_cryptography(512, save_path)) {
         std::cout << "\n✅ 密码学系统初始化成功!" << std::endl;
-        std::cout << "\n📌 下一步操作:" << std::endl;
-        std::cout << "   请选择菜单选项 '2. 💾 保存公共参数' 将参数保存到文件" << std::endl;
-        std::cout << "   这样可以在下次启动时自动加载这些参数" << std::endl;
+        std::cout << "\n💡 下一步:" << std::endl;
+        if (save_path.empty()) {
+            std::cout << "   请选择 '2. 保存公共参数' 以持久化参数" << std::endl;
+        } else {
+            std::cout << "   公共参数已自动保存，系统可以使用了" << std::endl;
+        }
     } else {
         std::cout << "\n❌ 初始化失败!" << std::endl;
-        std::cout << "   请检查系统依赖库是否正确安装 (PBC, GMP)" << std::endl;
     }
     
     wait_for_enter();
@@ -465,10 +354,8 @@ void handle_save_params(StorageNode* node) {
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     
     if (!node->is_crypto_initialized()) {
-        std::cout << "\n❌ 密码学系统未初始化" << std::endl;
-        std::cout << "\n📌 操作指引:" << std::endl;
-        std::cout << "   请先选择菜单选项 '1. 🔧 初始化密码学系统'" << std::endl;
-        std::cout << "   初始化完成后再保存公共参数" << std::endl;
+        std::cout << "\n❌ 密码学系统未初始化!" << std::endl;
+        std::cout << "💡 请先选择 '1. 初始化密码学系统'" << std::endl;
         wait_for_enter();
         return;
     }
@@ -553,6 +440,43 @@ void handle_load_params(StorageNode* node) {
         std::cout << "   - 参数数据损坏" << std::endl;
         std::cout << "\n💡 建议:" << std::endl;
         std::cout << "   如果是首次使用，请先选择 '1. 初始化密码学系统'" << std::endl;
+    }
+    
+    wait_for_enter();
+}
+
+void handle_view_public_params(StorageNode* node) {
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "🔑 查看公共参数" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    
+    std::cout << "\n📝 查看选项:" << std::endl;
+    std::cout << "   1. 从文件读取并查看" << std::endl;
+    std::cout << "   2. 查看内存中的参数 (需要已初始化)" << std::endl;
+    
+    int choice;
+    std::cout << "\n请选择 (1/2): ";
+    std::cin >> choice;
+    
+    if (choice == 1) {
+        std::string default_path = node->get_data_dir() + "/public_params.json";
+        std::cout << "\n默认路径: " << default_path << std::endl;
+        std::cout << "直接回车使用默认路径，或输入自定义路径" << std::endl;
+        std::cout << "请输入文件路径: ";
+        
+        std::string path;
+        clear_input_buffer();
+        std::getline(std::cin, path);
+        
+        if (path.empty()) {
+            path = default_path;
+        }
+        
+        node->display_public_params(path);
+    } else if (choice == 2) {
+        node->display_public_params("");  // 空路径表示显示内存中的参数
+    } else {
+        std::cout << "❌ 无效选择" << std::endl;
     }
     
     wait_for_enter();

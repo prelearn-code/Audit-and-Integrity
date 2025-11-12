@@ -16,28 +16,21 @@
 #include <fstream>
 #include <json/json.h>
 
-struct IndexEntry {
-    // 
-    std::string PK;              // 客户端公钥 (新增)
-    std::vector<std::string> TS_F;   // 文件认证标签集合,与file_auth_tags相同。
-    std::string Ti_bar;         // 状态关联的Token
-    std::string ptr;         // 加密指针
-    std::string ID_F; // 文件标识符 (ID_F)
-    std::string state;           // 状态: "valid" 或 "invalid" (修改为string)
-    std::string kt_wi;           //关键词关联标签。
-    std::string file_path;       //文件的本地存储位置
+struct IndexKeywords
+{
+    std::string ptr_i;   // 关键字的状态指针
+    std::string kt_wi;   // 关键词关联标签
+    std::string Ti_bar;  // 状态关联的Token
 };
 
-struct FileData {
-    std::string PK;              // 客户端公钥 (新增)
-    std::string ID_F;         // 文件ID (ID_F)
-    std::string C;           // 加密文本
-    std::string ptr;         // 文件指针 (ptr)
-    std::vector<std::string> TS_F;   // 文件认证标签 (TS_F)
-    std::string state;           // 状态: "valid" 或 "invalid" 
-    // 其中Ti_bars对应kt_wis,一一对应。
-    std::vector<std::string> Ti_bars; //关键词对应的状态关联的Token集合
-    std::vector<std::string> kt_wis; //关键词关联标签集合
+// 统一的数据结构：IndexEntry（同时用于索引和文件存储）
+struct IndexEntry { 
+    std::string ID_F;                      // 文件标识符 (ID_F)
+    std::string PK;                        // 客户端公钥
+    std::vector<std::string> TS_F;         // 文件认证标签集合
+    std::string state;                     // 状态: "valid" 或 "invalid"
+    std::string file_path;                 // 文件的本地存储位置
+    std::vector<IndexKeywords> keywords;   // 关联信息的集合
 };
 
 struct SearchResult {
@@ -70,9 +63,9 @@ private:
     mpz_t N;
     bool crypto_initialized;
     
-    // 存储
-    std::map<std::string, std::vector<IndexEntry>> index_database;
-    std::map<std::string, FileData> file_storage;
+    // 存储（统一使用IndexEntry，以ID_F为键）
+    // 修改说明：index_database 现在以 ID_F 作为 key，每个文件对应一个 IndexEntry
+    std::map<std::string, IndexEntry> index_database;
     
     // 配置
     std::string node_id;
@@ -185,11 +178,13 @@ public:
     
     /**
      * load_index_database() - 从文件加载索引数据库
+     * 新格式: 支持 file_count, ID_Fs, database 字段
      */
     bool load_index_database();
     
     /**
      * save_index_database() - 保存索引数据库到文件
+     * 新格式: 生成 file_count, ID_Fs, database 字段
      */
     bool save_index_database();
     
@@ -221,19 +216,19 @@ public:
      * {
      *   "PK": "客户端公钥",
      *   "ID_F": "文件唯一标识",
-     *   "ptr": "文件指针",
      *   "TS_F": "文件认证标签",
      *   "state": "valid",
+     *   "file_path":"加密文件地址"，
      *   "keywords": [
-     *     {"T_i": "状态令牌1", "kt_i": "关键词1"},
-     *     {"T_i": "状态令牌2", "kt_i": "关键词2"}
+     *     {"Ti_bar": "状态令牌1", "kt_wi": "关键词1"，"ptr_i":"关键词状态指针"},
+     *     {"Ti_bar": "状态令牌2", "kt_wi": "关键词2"，"ptr_i":"关键词状态指针"}
      *   ]
      * }
      */
     bool insert_file(const std::string& param_json_path, const std::string& enc_file_path);
     
     /**
-     * delete_file() - 删除文件 (v3.1: 增加PK身份验证)
+     * delete_file() - 删除文件 (待实现)
      * @param PK 客户端公钥，用于身份验证
      * @param file_id 文件ID
      * @param del_proof 删除证明
@@ -241,16 +236,14 @@ public:
     bool delete_file(const std::string& PK, const std::string& file_id, const std::string& del_proof);
     
     /**
-     * search_keyword() - 搜索关键词 (v3.1: 增加PK过滤)
+     * search_keyword() - 搜索关键词 (修改：删除seed参数，待实现)
      * @param PK 客户端公钥，只返回该客户端的文件
      * @param search_token 搜索令牌
      * @param latest_state 最新状态
-     * @param seed 种子
      */
     SearchResult search_keyword(const std::string& PK,
                                const std::string& search_token, 
-                               const std::string& latest_state,
-                               const std::string& seed);
+                               const std::string& latest_state);
     
     /**
      * generate_integrity_proof() - 生成完整性证明
@@ -261,14 +254,15 @@ public:
     // ========== 检索函数 ==========
     
     /**
-     * retrieve_file() - 检索文件
+     * retrieve_file() - 检索文件（重写：基于index_database）
+     * @param file_id 文件ID
+     * @return 文件信息（JSON格式）
+     * 
+     * 功能：
+     * 1. 在 index_database 中查找 ID_F
+     * 2. 返回完整的文件详细信息
      */
     Json::Value retrieve_file(const std::string& file_id);
-    
-    /**
-     * retrieve_files_batch() - 批量检索文件
-     */
-    Json::Value retrieve_files_batch(const std::vector<std::string>& file_ids);
     
     /**
      * get_file_metadata() - 获取文件元数据
@@ -317,19 +311,15 @@ public:
     }
     
     size_t get_file_count() const {
-        return file_storage.size();
+        return index_database.size();
     }
     
     size_t get_index_count() const {
-        size_t count = 0;
-        for (const auto& entry : index_database) {
-            count += entry.second.size();
-        }
-        return count;
+        return index_database.size();
     }
     
     bool has_file(const std::string& file_id) const {
-        return file_storage.find(file_id) != file_storage.end();
+        return index_database.find(file_id) != index_database.end();
     }
     
     bool is_crypto_initialized() const {
@@ -354,8 +344,7 @@ public:
         std::cout << "节点 ID:      " << node_id << std::endl;
         std::cout << "数据目录:     " << data_dir << std::endl;
         std::cout << "端口:         " << server_port << std::endl;
-        std::cout << "文件数:       " << file_storage.size() << std::endl;
-        std::cout << "索引数:       " << get_index_count() << std::endl;
+        std::cout << "文件数:       " << get_index_count() << std::endl;
         std::cout << "密码学:       " << (crypto_initialized ? "已初始化" : "未初始化") << std::endl;
         std::cout << "版本:         v3.4 (改进的参数序列化)" << std::endl;
         std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;

@@ -12,26 +12,31 @@
 #include <json/json.h>
 
 /**
- * @brief 本地加密存储客户端 v4.0
+ * @brief 本地加密存储客户端 v4.1
  * 实现可验证的可搜索加密与前向安全性
  * 
- * v4.0 主要变更（方案A重构）：
+ * v4.1 主要变更（目录结构重构）：
  * ===================================
  * 【核心修改】
- * - initialize() 统一从 public_params.json 加载所有参数（N, g, μ）
- * - 删除 system_params.json 依赖，配对参数硬编码
- * - generateKeys() 简化为仅生成密钥，不再加载参数
- * - 确保客户端与 Storage Node 参数完全一致
+ * - 所有运行时文件统一管理到 ./data 目录
+ * - 自动创建和管理目录结构
+ * - 使用原始文件名而非用户指定前缀
+ * - 自动更新 keyword_states.json
+ * - 文件存在时添加时间戳后缀
  * 
- * 【修复的问题】
- * - 修复 μ 参数未正确加载导致的认证标签错误
- * - 修复 N 值在多个文件中不一致的问题
- * - 修复 g 被重复加载的问题
+ * 【目录结构】
+ * ./data/
+ *   ├── Insert/           # insert.json 文件
+ *   ├── Delete/           # 预留：删除操作文件
+ *   ├── EncFiles/         # 加密文件 (.enc)
+ *   ├── MetaFiles/        # 元数据文件
+ *   ├── Search/           # 预留：搜索操作文件
+ *   └── keyword_states.json  # 关键词状态（自动更新）
  * 
- * 【接口变更】
- * - initialize(public_params_file) - 新增参数文件路径
- * - generateKeys() - 移除参数，简化为仅生成密钥
- * - loadKeys() - 增加初始化状态检查
+ * 【接口简化】
+ * - encryptFile(file_path, keywords) - 移除手动指定输出路径
+ * - initializeDataDirectories() - 新增目录初始化
+ * - extractFileName() - 新增文件名提取
  */
 class StorageClient {
 public:
@@ -50,7 +55,7 @@ public:
      * @param public_params_file Storage Node生成的公共参数文件路径
      * @return 成功返回true
      * 
-     * v4.0新逻辑：
+     * v4.0逻辑：
      * 1. 初始化配对参数（硬编码Type A曲线）
      * 2. 从 public_params.json 加载：
      *    - N: RSA模数
@@ -63,10 +68,26 @@ public:
     bool initialize(const std::string& public_params_file = "public_params.json");
     
     /**
+     * @brief 初始化数据目录结构（v4.1新增）
+     * @return 成功返回true
+     * 
+     * 创建以下目录：
+     * - ./data/Insert
+     * - ./data/Delete
+     * - ./data/EncFiles
+     * - ./data/MetaFiles
+     * - ./data/Search
+     * 
+     * 如果 keyword_states.json 不存在，会创建初始版本
+     * 并自动加载状态文件
+     */
+    bool initializeDataDirectories();
+    
+    /**
      * @brief 生成客户端密钥（v4.0简化）
      * @return 成功返回true
      * 
-     * v4.0新逻辑：
+     * v4.0逻辑：
      * 1. 检查是否已初始化（必须先调用initialize）
      * 2. 生成随机密钥：mk, sk, ek
      * 3. 计算公钥：pk = g^sk
@@ -78,22 +99,24 @@ public:
     bool generateKeys();
     
     /**
-     * @brief 加密文件并生成元数据
+     * @brief 加密文件并生成元数据（v4.1简化）
      * @param file_path 输入文件路径
      * @param keywords 关键词列表
-     * @param output_prefix 输出文件前缀
-     * @param insert_json_path 生成的insert.json路径（供Storage Node使用）
      * @return 成功返回true
      * 
-     * 输出文件：
-     * 1. [prefix].enc - 加密文件
-     * 2. insert.json - 供Storage Node的插入数据
-     * 3. [filename]_metadata.json - 本地元数据
+     * v4.1新逻辑：
+     * 1. 自动提取原始文件名
+     * 2. 检查文件是否存在，存在则添加时间戳后缀
+     * 3. 自动保存到对应目录：
+     *    - EncFiles/[filename].enc
+     *    - Insert/[filename]_insert.json
+     *    - MetaFiles/[filename]_metadata.json
+     * 4. 自动更新 ./data/keyword_states.json
+     * 
+     * 注意：不再需要手动指定输出路径
      */
     bool encryptFile(const std::string& file_path, 
-                     const std::vector<std::string>& keywords,
-                     const std::string& output_prefix,
-                     const std::string& insert_json_path = "insert.json");
+                     const std::vector<std::string>& keywords);
     
     /**
      * @brief 解密文件
@@ -145,11 +168,13 @@ public:
     bool saveKeywordStates(const std::string& file_path);
     
     /**
-     * @brief 更新关键词状态（添加历史记录）
+     * @brief 更新关键词状态（添加历史记录）（v4.1修改）
      * @param keyword 关键词
      * @param new_state 新状态值
      * @param file_id 关联的文件ID
      * @return 成功返回true
+     * 
+     * v4.1修改：自动保存到固定位置 ./data/keyword_states.json
      */
     bool updateKeywordState(const std::string& keyword, 
                            const std::string& new_state,
@@ -161,6 +186,13 @@ public:
      * @return 格式化的状态信息字符串
      */
     std::string queryKeywordState(const std::string& keyword);
+    
+    /**
+     * @brief 从文件路径提取文件名（不含路径）（v4.1新增）
+     * @param file_path 完整文件路径
+     * @return 文件名
+     */
+    std::string extractFileName(const std::string& file_path);
 
 private:
     // ============ 密码学操作 ============
@@ -228,8 +260,6 @@ private:
     * @return 搜索令牌 Ti = SE.Enc(mk, w_i)（使用AES-256-ECB加密）
     */
     std::string generateSearchToken(const std::string& keyword);
-
-
     
     /**
      * @brief 生成随机状态值
@@ -265,6 +295,22 @@ private:
     
     std::string getCurrentTimestamp();
     
+    /**
+     * @brief 检查文件是否存在（v4.1新增）
+     * @param file_path 文件路径
+     * @return 存在返回true
+     */
+    bool fileExists(const std::string& file_path);
+    
+    /**
+     * @brief 生成唯一文件名（文件存在时添加时间戳）（v4.1新增）
+     * @param base_path 基础路径
+     * @param filename 文件名
+     * @return 唯一的完整路径
+     */
+    std::string generateUniqueFilePath(const std::string& base_path, 
+                                      const std::string& filename);
+    
     // ============ 成员变量 ============
     
     // 配对参数和公共参数
@@ -285,6 +331,15 @@ private:
     std::string keyword_states_file_;    // 当前加载的状态文件路径
     bool states_loaded_;                 // 状态文件是否已加载
     Json::Value keyword_states_data_;    // 存储完整的JSON数据
+    
+    // v4.1新增：数据目录路径常量
+    inline static const std::string DATA_DIR = "./data";
+    inline static const std::string INSERT_DIR = "./data/Insert";
+    inline static const std::string DELETE_DIR = "./data/Delete";
+    inline static const std::string ENC_FILES_DIR = "./data/EncFiles";
+    inline static const std::string META_FILES_DIR = "./data/MetaFiles";
+    inline static const std::string SEARCH_DIR = "./data/Search";
+    inline static const std::string KEYWORD_STATES_FILE = "./data/keyword_states.json";
     
     // 常量定义
     inline static constexpr size_t BLOCK_SIZE = 4096;

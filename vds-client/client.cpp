@@ -6,8 +6,13 @@
 #include <cstring>
 #include <ctime>
 #include <random>
+#include <filesystem>
+#include <sys/stat.h>
+#include <errno.h>
 #include <openssl/rand.h>
 #include <openssl/evp.h>
+
+namespace fs = std::filesystem;
 
 // ============================================================================
 // 构造函数和析构函数
@@ -28,6 +33,123 @@ StorageClient::~StorageClient() {
     }
     mpz_clear(N_);
     mpz_clear(sk_);
+}
+
+// ============================================================================
+// v4.1新增：目录管理功能
+// ============================================================================
+
+bool StorageClient::initializeDataDirectories() {
+    std::cout << "\n[目录初始化] 检查并创建数据目录..." << std::endl;
+    
+    std::vector<std::string> dirs = {
+        DATA_DIR,
+        INSERT_DIR,
+        DELETE_DIR,
+        ENC_FILES_DIR,
+        META_FILES_DIR,
+        SEARCH_DIR
+    };
+    
+    for (const auto& dir : dirs) {
+        try {
+            if (!fs::exists(dir)) {
+                fs::create_directories(dir);
+                std::cout << "[成功] 目录已创建: " << dir << std::endl;
+            } else {
+                std::cout << "[存在] 目录已就绪: " << dir << std::endl;
+            }
+        } catch (const fs::filesystem_error& e) {
+            std::cerr << "[错误] 创建目录失败: " << dir 
+                      << " - " << e.what() << std::endl;
+            return false;
+        }
+    }
+    
+    // 检查或创建 keyword_states.json
+    if (!fs::exists(KEYWORD_STATES_FILE)) {
+        std::cout << "[初始化] 创建新的 keyword_states.json" << std::endl;
+        Json::Value initial_data;
+        initial_data["version"] = "v4.1";
+        initial_data["keywords"] = Json::Value(Json::objectValue);
+        
+        std::ofstream states_file(KEYWORD_STATES_FILE);
+        if (states_file.is_open()) {
+            Json::StreamWriterBuilder writer;
+            writer["indentation"] = "  ";
+            states_file << Json::writeString(writer, initial_data);
+            states_file.close();
+            std::cout << "[成功] keyword_states.json 已创建" << std::endl;
+        } else {
+            std::cerr << "[错误] 无法创建 keyword_states.json" << std::endl;
+            return false;
+        }
+    } else {
+        std::cout << "[存在] keyword_states.json 已就绪" << std::endl;
+    }
+    
+    // 自动加载状态文件
+    keyword_states_file_ = KEYWORD_STATES_FILE;
+    if (!loadKeywordStates(KEYWORD_STATES_FILE)) {
+        std::cerr << "[警告] 无法加载状态文件，将创建新文件" << std::endl;
+        keyword_states_data_ = Json::Value(Json::objectValue);
+        keyword_states_data_["version"] = "v4.1";
+        keyword_states_data_["keywords"] = Json::Value(Json::objectValue);
+        states_loaded_ = true;
+    }
+    
+    std::cout << "[完成] 数据目录初始化成功\n" << std::endl;
+    return true;
+}
+
+std::string StorageClient::extractFileName(const std::string& file_path) {
+    // 使用 C++17 filesystem 提取文件名
+    fs::path path(file_path);
+    return path.filename().string();
+}
+
+bool StorageClient::fileExists(const std::string& file_path) {
+    return fs::exists(file_path);
+}
+
+std::string StorageClient::generateUniqueFilePath(const std::string& base_path, 
+                                                  const std::string& filename) {
+    std::string full_path = base_path + "/" + filename;
+    
+    if (!fileExists(full_path)) {
+        return full_path;
+    }
+    
+    // 文件存在，添加时间戳后缀
+    std::cout << "[提示] 文件已存在: " << full_path << std::endl;
+    std::cout << "        将添加时间戳后缀以避免覆盖" << std::endl;
+    
+    // 分离文件名和扩展名
+    fs::path path(filename);
+    std::string stem = path.stem().string();
+    std::string extension = path.extension().string();
+    
+    // 生成时间戳
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm* local_time = std::localtime(&time_t_now);
+    
+    std::ostringstream timestamp;
+    timestamp << "_" 
+              << (local_time->tm_year + 1900)
+              << std::setw(2) << std::setfill('0') << (local_time->tm_mon + 1)
+              << std::setw(2) << std::setfill('0') << local_time->tm_mday
+              << "_"
+              << std::setw(2) << std::setfill('0') << local_time->tm_hour
+              << std::setw(2) << std::setfill('0') << local_time->tm_min
+              << std::setw(2) << std::setfill('0') << local_time->tm_sec;
+    
+    std::string new_filename = stem + timestamp.str() + extension;
+    std::string new_path = base_path + "/" + new_filename;
+    
+    std::cout << "[生成] 新文件名: " << new_filename << std::endl;
+    
+    return new_path;
 }
 
 // ============================================================================
@@ -297,8 +419,8 @@ bool StorageClient::generateKeys() {
     Json::Value pub_key_json;
     pub_key_json["pk"] = serializeElement(pk_);
     pub_key_json["timestamp"] = getCurrentTimestamp();
-    pub_key_json["version"] = "v4.0";
-    pub_key_json["note"] = "Public key generated by StorageClient v4.0";
+    pub_key_json["version"] = "v4.1";
+    pub_key_json["note"] = "Public key generated by StorageClient v4.1";
     
     std::ofstream pub_file("public_key.json");
     if (!pub_file.is_open()) {
@@ -421,19 +543,21 @@ std::string StorageClient::getPublicKey() {
 }
 
 // ============================================================================
-// 文件加密功能
+// 文件加密功能（v4.1重构）
 // ============================================================================
 
 bool StorageClient::encryptFile(const std::string& file_path,
-                               const std::vector<std::string>& keywords,
-                               const std::string& output_prefix,
-                               const std::string& insert_json_path) {
+                               const std::vector<std::string>& keywords) {
     if (!initialized_) {
         std::cerr << "[错误] 系统尚未初始化" << std::endl;
         return false;
     }
     
     std::cout << "\n[文件加密] 开始加密文件: " << file_path << std::endl;
+    
+    // 提取原始文件名
+    std::string original_filename = extractFileName(file_path);
+    std::cout << "[加密] 原始文件名: " << original_filename << std::endl;
     
     // 读取文件
     std::vector<unsigned char> plaintext;
@@ -450,7 +574,7 @@ bool StorageClient::encryptFile(const std::string& file_path,
     }
     std::cout << "[加密] 密文大小: " << ciphertext.size() << " 字节" << std::endl;
     
-    // 使用密文计算文件ID
+    // 计算文件ID
     mpz_t file_id_int;
     mpz_init(file_id_int);
     std::string ciphertext_str(ciphertext.begin(), ciphertext.end());
@@ -461,9 +585,17 @@ bool StorageClient::encryptFile(const std::string& file_path,
     mpz_clear(file_id_int);
     std::cout << "[加密] 文件ID (H1(C)): " << file_id.substr(0, 32) << "..." << std::endl;
     
-    // 保存加密文件
-    std::string enc_file = output_prefix + ".enc";
+    // ========== v4.1修改：使用新的目录结构和唯一文件名 ==========
+    
+    // 1. 生成唯一的加密文件路径
+    std::string enc_filename = original_filename + ".enc";
+    std::string enc_file = generateUniqueFilePath(ENC_FILES_DIR, enc_filename);
+    
     if (!writeFile(enc_file, ciphertext)) {
+        std::cerr << "[错误] 无法保存加密文件: " << enc_file << std::endl;
+        std::cerr << "       请检查:" << std::endl;
+        std::cerr << "       1. 目录权限" << std::endl;
+        std::cerr << "       2. 磁盘空间" << std::endl;
         return false;
     }
     std::cout << "[成功] 加密文件已保存: " << enc_file << std::endl;
@@ -476,36 +608,33 @@ bool StorageClient::encryptFile(const std::string& file_path,
     }
     std::cout << "[加密] 认证标签数量: " << auth_tags.size() << std::endl;
     
-    // ========== 修改：关键词数据处理 ==========
+    // 处理关键词数据
     Json::Value keywords_data(Json::arrayValue);
     for (const auto& keyword : keywords) {
         Json::Value kw_obj;
         
-        // 步骤 1：生成原始搜索令牌 Ti
+        // 生成搜索令牌
         std::string Ti = generateSearchToken(keyword);
         
-        // 步骤 2：获取前一个状态（用于 kt 计算）
+        // 获取前一个状态
         std::string previous_state;
         auto it = keyword_states_.find(keyword);
         if (it != keyword_states_.end()) {
             previous_state = it->second;
         }
         
-        // 步骤 3：生成新的最新状态 st_d
+        // 生成新状态
         std::string new_state = generateRandomState();
-
-        // 计算状态链
-        std::string ptr;
-        ptr = encryptPointer(compute_hash_H3(new_state),previous_state);
+        
+        // 计算状态链ptr
+        std::string ptr = encryptPointer(computeHashH3(new_state), previous_state);
         kw_obj["ptr_i"] = ptr;
         
-        // 步骤 4：生成状态关联令牌 T̄ᵢ = H₂(Ti||st_d)
+        // 生成状态关联令牌
         std::string Ti_bar = generateStateAssociatedToken(Ti, new_state);
+        kw_obj["Ti_bar"] = Ti_bar;
         
-        // 步骤 5：将 T̄ᵢ 写入
-        kw_obj["Ti_bar"] = Ti_bar;  // 存储的是状态关联后的令牌
-        
-        // 步骤 6：生成关键词关联标签 kt
+        // 生成关键词关联标签
         std::string kt;
         if (!generateKeywordAssociatedTag(file_id, Ti, new_state, previous_state, kt)) {
             std::cerr << "[错误] 状态关联令牌生成失败" << std::endl;
@@ -515,27 +644,31 @@ bool StorageClient::encryptFile(const std::string& file_path,
         
         keywords_data.append(kw_obj);
         
-        // 步骤 7：更新状态存储
-        updateKeywordState(keyword, new_state, file_id);
+        // 更新状态存储（会自动保存到 ./data/keyword_states.json）
+        if (!updateKeywordState(keyword, new_state, file_id)) {
+            std::cerr << "[警告] 状态更新失败" << std::endl;
+        }
     }
     
-    // 构建 insert.json
+    // 2. 构建并保存 insert.json 到 Insert 目录
     Json::Value insert_json;
     insert_json["PK"] = getPublicKey();
     insert_json["ID_F"] = file_id;
-    insert_json["ptr"] = enc_file;
     
-    // TS_F：使用JSON数组存储所有认证标签
     Json::Value ts_f_array(Json::arrayValue);
     for (const auto& tag : auth_tags) {
         ts_f_array.append(tag);
     }
     insert_json["TS_F"] = ts_f_array;
-    
     insert_json["state"] = "valid";
     insert_json["keywords"] = keywords_data;
     
-    // 保存 insert.json
+    // 使用与加密文件相同的基础名生成insert文件名
+    fs::path enc_path(enc_file);
+    std::string base_name = enc_path.stem().string(); // 移除.enc扩展名
+    std::string insert_filename = base_name + "_insert.json";
+    std::string insert_json_path = INSERT_DIR + "/" + insert_filename;
+    
     std::ofstream insert_file(insert_json_path);
     if (!insert_file.is_open()) {
         std::cerr << "[错误] 无法创建 " << insert_json_path << std::endl;
@@ -548,7 +681,7 @@ bool StorageClient::encryptFile(const std::string& file_path,
     insert_file.close();
     std::cout << "[成功] insert.json 已生成: " << insert_json_path << std::endl;
     
-    // 生成本地元数据
+    // 3. 生成并保存元数据到 MetaFiles 目录
     Json::Value metadata;
     metadata["file_id"] = file_id;
     metadata["original_file"] = file_path;
@@ -559,7 +692,9 @@ bool StorageClient::encryptFile(const std::string& file_path,
     }
     metadata["timestamp"] = getCurrentTimestamp();
     
-    std::string metadata_file = file_path + "_metadata.json";
+    std::string metadata_filename = base_name + "_metadata.json";
+    std::string metadata_file = META_FILES_DIR + "/" + metadata_filename;
+    
     std::ofstream meta_file(metadata_file);
     if (meta_file.is_open()) {
         meta_file << Json::writeString(writer, metadata);
@@ -567,9 +702,16 @@ bool StorageClient::encryptFile(const std::string& file_path,
         std::cout << "[成功] 元数据已保存: " << metadata_file << std::endl;
     }
     
-    std::cout << "[完成] 文件加密成功" << std::endl;
+    std::cout << "\n[完成] 文件加密成功" << std::endl;
+    std::cout << "📦 生成的文件:" << std::endl;
+    std::cout << "   - " << enc_file << std::endl;
+    std::cout << "   - " << insert_json_path << std::endl;
+    std::cout << "   - " << metadata_file << std::endl;
+    std::cout << "   - " << KEYWORD_STATES_FILE << " (已自动更新)" << std::endl;
+    
     return true;
 }
+
 // ============================================================================
 // 文件解密功能
 // ============================================================================
@@ -606,11 +748,6 @@ bool StorageClient::decryptFile(const std::string& encrypted_file,
     std::cout << "[完成] 文件解密成功: " << output_path << std::endl;
     return true;
 }
-
-// （由于字符数限制，剩余代码将在下一个文件中继续）
-// ============================================================================
-// client.cpp 第2部分：密码学操作和辅助函数
-// ============================================================================
 
 // ============================================================================
 // 密码学操作 - 数据加密/解密
@@ -720,7 +857,7 @@ bool StorageClient::generateAuthTags(const std::string& file_id,
     // 将密文分块
     auto blocks = splitIntoBlocks(ciphertext, BLOCK_SIZE);
     auth_tags.clear();
-    // 首先给密文分成BLOCK_SIZE块
+    
     for (size_t i = 0; i < blocks.size(); ++i) {
         // σ_i = [H_2(ID_F||i) * ∏_{j=1}^s μ^{c_{i,j}}]^sk
         
@@ -737,7 +874,7 @@ bool StorageClient::generateAuthTags(const std::string& file_id,
         
         // 计算 ∏_{j=1}^s μ^{c_{i,j}}
         auto sectors = splitIntoBlocks(blocks[i], SECTOR_SIZE);
-        // 分为扇区
+        
         for (size_t j = 0; j < sectors.size(); ++j) {
             // 将扇区数据转换为整数
             mpz_t c_ij;
@@ -864,45 +1001,42 @@ std::string StorageClient::computeHashH3(const std::string& input) {
 }
 
 std::string StorageClient::generateSearchToken(const std::string& keyword) {
-    // T_i = SE.Enc(mk, w_i) - 使用对称加密（AES-256-ECB）
-    
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
-        std::cerr << "[错误] 加密上下文创建失败" << std::endl;
         return "";
     }
     
-    // 使用主密钥mk进行AES加密
+    // 使用AES-256-ECB加密关键词
     if (EVP_EncryptInit_ex(ctx, EVP_aes_256_ecb(), nullptr, mk_, nullptr) != 1) {
-        std::cerr << "[错误] 加密初始化失败" << std::endl;
         EVP_CIPHER_CTX_free(ctx);
         return "";
     }
     
-    // 准备明文（关键词）
-    std::vector<unsigned char> plaintext(keyword.begin(), keyword.end());
-    std::vector<unsigned char> ciphertext(plaintext.size() + EVP_CIPHER_block_size(EVP_aes_256_ecb()));
+    // 准备输入（填充到16字节的倍数）
+    std::vector<unsigned char> input(keyword.begin(), keyword.end());
+    size_t padded_size = ((input.size() + 15) / 16) * 16;
+    input.resize(padded_size, 0);
     
+    std::vector<unsigned char> output(padded_size + EVP_CIPHER_block_size(EVP_aes_256_ecb()));
     int len = 0;
-    if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len, plaintext.data(), plaintext.size()) != 1) {
-        std::cerr << "[错误] 加密更新失败" << std::endl;
+    int total_len = 0;
+    
+    if (EVP_EncryptUpdate(ctx, output.data(), &len, input.data(), input.size()) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return "";
     }
+    total_len = len;
     
-    int ciphertext_len = len;
-    if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
-        std::cerr << "[错误] 加密finalize失败" << std::endl;
+    if (EVP_EncryptFinal_ex(ctx, output.data() + len, &len) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return "";
     }
-    ciphertext_len += len;
+    total_len += len;
     
-    ciphertext.resize(ciphertext_len);
+    output.resize(total_len);
     EVP_CIPHER_CTX_free(ctx);
     
-    // 转换为十六进制字符串返回
-    return bytesToHex(ciphertext);
+    return bytesToHex(output);
 }
 
 std::string StorageClient::generateRandomState() {
@@ -919,76 +1053,72 @@ std::string StorageClient::generateRandomState() {
     return oss.str();
 }
 
-std::string StorageClient::encryptPointer(const std::string& previous_state,
-                                         const std::string& current_state_hash) {
-    // 如果没有前一状态，加密当前状态哈希
-    std::string data_to_encrypt = previous_state.empty() ? 
-                                  current_state_hash : previous_state;
+std::string StorageClient::encryptPointer(const std::string& current_state_hash,
+                                         const std::string& previous_state) {
+    if (previous_state.empty()) {
+        // 第一个状态，返回空指针
+        return std::string(64, '0');
+    }
     
-    // 使用当前状态哈希作为密钥（取前32字节）
-    unsigned char key[32];
-    std::memcpy(key, current_state_hash.c_str(), 32);
-    
-    // AES-256-ECB加密
+    // 使用当前状态的哈希作为密钥加密前一个状态
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
         return "";
     }
     
-    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_ecb(), nullptr, key, nullptr) != 1) {
+    // 从哈希中提取前32字节作为AES密钥
+    unsigned char key[32];
+    for (size_t i = 0; i < 32 && i * 2 < current_state_hash.length(); ++i) {
+        std::string byte_str = current_state_hash.substr(i * 2, 2);
+        key[i] = static_cast<unsigned char>(std::stoi(byte_str, nullptr, 16));
+    }
+    
+    unsigned char iv[16] = {0}; // 使用零IV
+    
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, iv) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return "";
     }
     
-    std::vector<unsigned char> plaintext(data_to_encrypt.begin(),
-                                        data_to_encrypt.end());
-    std::vector<unsigned char> ciphertext(plaintext.size() + 
-                                         EVP_CIPHER_block_size(EVP_aes_256_ecb()));
+    std::vector<unsigned char> plaintext(previous_state.begin(), previous_state.end());
+    std::vector<unsigned char> ciphertext(plaintext.size() + EVP_CIPHER_block_size(EVP_aes_256_cbc()));
     
     int len = 0;
-    if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
-                         plaintext.data(), plaintext.size()) != 1) {
+    int total_len = 0;
+    
+    if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len, plaintext.data(), plaintext.size()) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return "";
     }
+    total_len = len;
     
-    int ciphertext_len = len;
     if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return "";
     }
-    ciphertext_len += len;
+    total_len += len;
     
-    ciphertext.resize(ciphertext_len);
+    ciphertext.resize(total_len);
     EVP_CIPHER_CTX_free(ctx);
     
     return bytesToHex(ciphertext);
 }
-std::string StorageClient::generateStateAssociatedToken(
-    const std::string& Ti, 
-    const std::string& st_d) 
-{
-    // 步骤 1：拼接 Ti 和 st_d
-    std::string concatenated = Ti + st_d;
+
+std::string StorageClient::generateStateAssociatedToken(const std::string& Ti, 
+                                                       const std::string& st_d) {
+    // 计算 H_2(Ti||st_d)
+    element_t result;
+    element_init_G1(result, pairing_);
+    computeHashH2(Ti + st_d, result);
     
-    // 步骤 2：初始化 G₁ 群元素
-    element_t hash_result;
-    element_init_G1(hash_result, pairing_);
+    std::string serialized = serializeElement(result);
+    element_clear(result);
     
-    // 步骤 3：使用 H₂ 哈希到 G₁ 群
-    computeHashH2(concatenated, hash_result);
-    
-    // 步骤 4：序列化为十六进制字符串
-    std::string Ti_bar = serializeElement(hash_result);
-    
-    // 步骤 5：清理资源
-    element_clear(hash_result);
-    
-    return Ti_bar;
+    return serialized;
 }
 
 // ============================================================================
-// 关键词状态管理
+// 关键词状态管理（v4.1修改）
 // ============================================================================
 
 bool StorageClient::loadKeywordStates(const std::string& file_path) {
@@ -1030,7 +1160,7 @@ bool StorageClient::saveKeywordStates(const std::string& file_path) {
     if (!states_loaded_ && keyword_states_data_.isNull()) {
         keyword_states_data_ = Json::Value(Json::objectValue);
         keyword_states_data_["keywords"] = Json::Value(Json::objectValue);
-        keyword_states_data_["version"] = "v4.0";
+        keyword_states_data_["version"] = "v4.1";
     }
     
     std::ofstream file(file_path);
@@ -1056,7 +1186,7 @@ bool StorageClient::updateKeywordState(const std::string& keyword,
     if (keyword_states_data_.isNull()) {
         keyword_states_data_ = Json::Value(Json::objectValue);
         keyword_states_data_["keywords"] = Json::Value(Json::objectValue);
-        keyword_states_data_["version"] = "v4.0";
+        keyword_states_data_["version"] = "v4.1";
     }
     
     Json::Value& keywords = keyword_states_data_["keywords"];
@@ -1080,12 +1210,8 @@ bool StorageClient::updateKeywordState(const std::string& keyword,
     // 更新内存映射
     keyword_states_[keyword] = new_state;
     
-    // 如果已加载状态文件，自动保存
-    if (states_loaded_ && !keyword_states_file_.empty()) {
-        return saveKeywordStates(keyword_states_file_);
-    }
-    
-    return true;
+    // ========== v4.1修改：始终保存到固定位置 ==========
+    return saveKeywordStates(KEYWORD_STATES_FILE);
 }
 
 std::string StorageClient::queryKeywordState(const std::string& keyword) {
@@ -1201,11 +1327,8 @@ bool StorageClient::deserializeElement(const std::string& hex_str, element_t ele
         bytes.push_back(byte);
     }
     
-    // element_from_bytes 成功时返回读取的字节数（正整数）
-    // 失败时返回 0 或负数
     int bytes_read = element_from_bytes(elem, bytes.data());
     if (bytes_read <= 0) {
-        std::cerr << "[调试] element_from_bytes 返回值: " << bytes_read << std::endl;
         return false;
     }
     

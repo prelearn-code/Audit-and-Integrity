@@ -10,7 +10,7 @@
 StorageNode::StorageNode(const std::string& data_directory, int port) 
     : data_dir(data_directory), server_port(port), crypto_initialized(false) {
     
-    files_dir = data_dir + "/files";
+    files_dir = data_dir + "/EncFiles";
     metadata_dir = data_dir + "/metadata";
     
     // 生成节点ID
@@ -646,7 +646,7 @@ bool StorageNode::initialize_directories() {
 bool StorageNode::create_default_config() {
     Json::Value config;
     
-    config["version"] = "3.2";
+    config["version"] = "3.4";
     config["node"]["node_id"] = node_id;
     config["node"]["created_at"] = get_current_timestamp();
     config["node"]["description"] = "去中心化存储节点 (支持公共参数持久化)";
@@ -688,7 +688,7 @@ bool StorageNode::load_config() {
 bool StorageNode::save_config() {
     Json::Value config;
     
-    config["version"] = "3.2";
+    config["version"] = "3.4";
     config["node"]["node_id"] = node_id;
     config["node"]["last_update"] = get_current_timestamp();
     
@@ -702,7 +702,7 @@ bool StorageNode::save_config() {
     return save_json_to_file(config, config_path);
 }
 
-// ==================== 索引数据库操作 ====================
+// ==================== 索引数据库操作 (重构) ====================
 
 bool StorageNode::load_index_database() {
     std::string index_path = data_dir + "/index_db.json";
@@ -714,60 +714,138 @@ bool StorageNode::load_index_database() {
     
     Json::Value root = load_json_from_file(index_path);
     
-    if (!root.isMember("indices")) {
+    // 新格式：支持 file_count, ID_Fs, database 字段
+    if (root.isMember("database") && root["database"].isArray()) {
+        // 新格式
+        index_database.clear();
+        
+        for (const auto& entry_json : root["database"]) {
+            IndexEntry entry;
+            entry.ID_F = entry_json["ID_F"].asString();
+            entry.PK = entry_json["PK"].asString();
+            entry.state = entry_json["state"].asString();
+            entry.file_path = entry_json.get("file_path", "").asString();
+            
+            // 加载 TS_F
+            if (entry_json.isMember("TS_F") && entry_json["TS_F"].isArray()) {
+                for (const auto& ts : entry_json["TS_F"]) {
+                    entry.TS_F.push_back(ts.asString());
+                }
+            }
+            
+            // 加载 keywords
+            if (entry_json.isMember("keywords") && entry_json["keywords"].isArray()) {
+                for (const auto& kw_json : entry_json["keywords"]) {
+                    IndexKeywords kw;
+                    kw.ptr_i = kw_json.get("ptr_i", "").asString();
+                    kw.kt_wi = kw_json.get("kt_wi", "").asString();
+                    kw.Ti_bar = kw_json.get("Ti_bar", "").asString();
+                    entry.keywords.push_back(kw);
+                }
+            }
+            
+            // 以 ID_F 为键存储
+            index_database[entry.ID_F] = entry;
+        }
+        
+        std::cout << "✅ 索引数据库加载成功 (新格式，共 " << index_database.size() << " 个文件)" << std::endl;
+        
+    } else if (root.isMember("indices")) {
+        // 旧格式兼容：indices 是一个对象，键是 Ti_bar
+        std::cout << "⚠️  检测到旧格式数据库，正在转换..." << std::endl;
+        index_database.clear();
+        
+        for (const auto& token : root["indices"].getMemberNames()) {
+            for (const auto& entry_json : root["indices"][token]) {
+                IndexEntry entry;
+                entry.ID_F = entry_json["ID_F"].asString();
+                entry.PK = entry_json["PK"].asString();
+                entry.state = entry_json["state"].asString();
+                entry.file_path = entry_json.get("file_path", "").asString();
+                
+                // 加载 TS_F
+                if (entry_json.isMember("TS_F") && entry_json["TS_F"].isArray()) {
+                    for (const auto& ts : entry_json["TS_F"]) {
+                        entry.TS_F.push_back(ts.asString());
+                    }
+                }
+                
+                // 加载 keywords
+                if (entry_json.isMember("keywords") && entry_json["keywords"].isArray()) {
+                    for (const auto& kw_json : entry_json["keywords"]) {
+                        IndexKeywords kw;
+                        kw.ptr_i = kw_json.get("ptr_i", "").asString();
+                        kw.kt_wi = kw_json.get("kt_wi", "").asString();
+                        kw.Ti_bar = kw_json.get("Ti_bar", "").asString();
+                        entry.keywords.push_back(kw);
+                    }
+                }
+                
+                // 以 ID_F 为键存储（去重）
+                if (index_database.find(entry.ID_F) == index_database.end()) {
+                    index_database[entry.ID_F] = entry;
+                }
+            }
+        }
+        
+        std::cout << "✅ 索引数据库加载成功 (旧格式已转换，共 " << index_database.size() << " 个文件)" << std::endl;
+        std::cout << "💡 建议：下次保存时将自动更新为新格式" << std::endl;
+        
+    } else {
         std::cerr << "❌ 索引数据库格式错误" << std::endl;
         return false;
     }
     
-    index_database.clear();
-    
-    for (const auto& token : root["indices"].getMemberNames()) {
-        std::vector<IndexEntry> entries;
-        
-        for (const auto& entry_json : root["indices"][token]) {
-            IndexEntry entry;
-            entry.PK = entry_json["PK"].asString();
-            entry.Ts = entry_json["Ts"].asString();
-            entry.keyword = entry_json["keyword"].asString();
-            entry.pointer = entry_json["pointer"].asString();
-            entry.file_identifier = entry_json["file_identifier"].asString();
-            entry.state = entry_json["state"].asString();
-            
-            entries.push_back(entry);
-        }
-        
-        index_database[token] = entries;
-    }
-    
-    std::cout << "✅ 索引数据库加载成功 (共 " << get_index_count() << " 条索引)" << std::endl;
     return true;
 }
 
 bool StorageNode::save_index_database() {
     Json::Value root;
-    root["version"] = "3.2";
+    root["version"] = "3.4";
     root["last_update"] = get_current_timestamp();
     
-    Json::Value indices;
-    for (const auto& pair : index_database) {
-        Json::Value entries(Json::arrayValue);
-        
-        for (const auto& entry : pair.second) {
-            Json::Value entry_json;
-            entry_json["PK"] = entry.PK;
-            entry_json["Ts"] = entry.Ts;
-            entry_json["keyword"] = entry.keyword;
-            entry_json["pointer"] = entry.pointer;
-            entry_json["file_identifier"] = entry.file_identifier;
-            entry_json["state"] = entry.state;
-            
-            entries.append(entry_json);
-        }
-        
-        indices[pair.first] = entries;
-    }
+    // 新格式：file_count, ID_Fs, database
+    root["file_count"] = static_cast<int>(index_database.size());
     
-    root["indices"] = indices;
+    // 生成 ID_Fs 数组
+    Json::Value id_fs_array(Json::arrayValue);
+    for (const auto& pair : index_database) {
+        id_fs_array.append(pair.first);
+    }
+    root["ID_Fs"] = id_fs_array;
+    
+    // 生成 database 数组
+    Json::Value database_array(Json::arrayValue);
+    for (const auto& pair : index_database) {
+        const IndexEntry& entry = pair.second;
+        
+        Json::Value entry_json;
+        entry_json["ID_F"] = entry.ID_F;
+        entry_json["PK"] = entry.PK;
+        entry_json["state"] = entry.state;
+        entry_json["file_path"] = entry.file_path;
+        
+        // 保存 TS_F
+        Json::Value ts_f_array(Json::arrayValue);
+        for (const auto& ts : entry.TS_F) {
+            ts_f_array.append(ts);
+        }
+        entry_json["TS_F"] = ts_f_array;
+        
+        // 保存 keywords
+        Json::Value keywords_array(Json::arrayValue);
+        for (const auto& kw : entry.keywords) {
+            Json::Value kw_json;
+            kw_json["ptr_i"] = kw.ptr_i;
+            kw_json["kt_wi"] = kw.kt_wi;
+            kw_json["Ti_bar"] = kw.Ti_bar;
+            keywords_array.append(kw_json);
+        }
+        entry_json["keywords"] = keywords_array;
+        
+        database_array.append(entry_json);
+    }
+    root["database"] = database_array;
     
     std::string index_path = data_dir + "/index_db.json";
     return save_json_to_file(root, index_path);
@@ -792,10 +870,10 @@ bool StorageNode::save_node_info() {
     Json::Value info;
     
     info["node_id"] = node_id;
-    info["version"] = "3.2";
+    info["version"] = "3.4";
     info["last_update"] = get_current_timestamp();
-    info["statistics"]["total_files"] = static_cast<int>(file_storage.size());
-    info["statistics"]["total_indices"] = static_cast<int>(get_index_count());
+    info["statistics"]["total_files"] = static_cast<int>(index_database.size());
+    info["statistics"]["total_indices"] = static_cast<int>(index_database.size());
     
     std::string info_path = data_dir + "/node_info.json";
     return save_json_to_file(info, info_path);
@@ -805,36 +883,39 @@ void StorageNode::update_statistics(const std::string& operation) {
     save_node_info();
 }
 
-// ==================== 文件操作 ====================
+// ==================== 文件操作 (修改) ====================
 
 bool StorageNode::insert_file(const std::string& param_json_path, const std::string& enc_file_path) {
     std::cout << "\n📤 插入文件..." << std::endl;
     
-    // 读取参数JSON
-    if (!file_exists(param_json_path)) {
-        std::cerr << "❌ 参数文件不存在: " << param_json_path << std::endl;
+    // 验证密码学系统
+    if (!crypto_initialized) {
+        std::cerr << "❌ 密码学系统未初始化" << std::endl;
         return false;
     }
     
+    // 加载参数JSON
     Json::Value params = load_json_from_file(param_json_path);
+    if (params.isNull()) {
+        std::cerr << "❌ 参数文件加载失败" << std::endl;
+        return false;
+    }
     
-    // 验证必需字段
+    // 验证必需字段（注意：ptr字段是可选的）
     if (!params.isMember("PK") || !params.isMember("ID_F") || 
-        !params.isMember("ptr") || !params.isMember("TS_F") ||
+        !params.isMember("TS_F") || !params.isMember("state") || 
         !params.isMember("keywords")) {
-        std::cerr << "❌ 参数JSON缺少必需字段" << std::endl;
+        std::cerr << "❌ 参数文件缺少必需字段 (PK, ID_F, TS_F, state, keywords)" << std::endl;
         return false;
     }
     
     std::string PK = params["PK"].asString();
-    std::string file_id = params["ID_F"].asString();
-    std::string ptr = params["ptr"].asString();
-    std::string ts_f = params["TS_F"].asString();
-    std::string state = params.isMember("state") ? params["state"].asString() : "valid";
+    std::string ID_F = params["ID_F"].asString();
+    std::string state = params["state"].asString();
     
-    std::cout << "   文件ID:   " << file_id << std::endl;
+    std::cout << "   文件ID: " << ID_F << std::endl;
     std::cout << "   客户端PK: " << PK.substr(0, 16) << "..." << std::endl;
-    std::cout << "   状态:     " << state << std::endl;
+    std::cout << "   状态: " << state << std::endl;
     
     // 验证PK格式
     if (!verify_pk_format(PK)) {
@@ -843,65 +924,111 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     }
     
     // 检查文件是否已存在
-    if (has_file(file_id)) {
+    if (has_file(ID_F)) {
         std::cerr << "❌ 文件ID已存在" << std::endl;
         return false;
     }
     
-    // 读取加密文件
+    // 加载加密文件
     std::string ciphertext = read_file_content(enc_file_path);
     if (ciphertext.empty()) {
-        std::cerr << "❌ 无法读取加密文件" << std::endl;
+        std::cerr << "❌ 加密文件读取失败" << std::endl;
         return false;
     }
     
-    // 保存文件数据
-    FileData file_data;
-    file_data.PK = PK;
-    file_data.file_id = file_id;
-    file_data.ciphertext = ciphertext;
-    file_data.pointer = ptr;
-    file_data.file_auth_tag = ts_f;
-    file_data.state = state;
+    // 创建 IndexEntry（统一的数据结构）
+    IndexEntry entry;
+    entry.ID_F = ID_F;
+    entry.PK = PK;
+    entry.state = state;
+    entry.file_path = files_dir + "/" + ID_F + ".enc";
     
-    file_storage[file_id] = file_data;
-    
-    // 保存加密文件
-    save_encrypted_file(file_id, enc_file_path);
-    
-    // 处理关键词索引
-    int keyword_count = 0;
-    for (const auto& kw : params["keywords"]) {
-        if (!kw.isMember("Ti_bar") || !kw.isMember("kt_i")) {
-            std::cerr << "⚠️  关键词格式错误,跳过" << std::endl;
-            continue;
+    // 解析 TS_F（文件认证标签）
+    Json::Value ts_f_array = params["TS_F"];
+    if (ts_f_array.isArray()) {
+        for (const auto& tag : ts_f_array) {
+            entry.TS_F.push_back(tag.asString());
         }
-        
-        IndexEntry entry;
-        entry.PK = PK;
-        entry.Ts = kw["Ti_bar"].asString();
-        entry.keyword = kw["kt_i"].asString();
-        entry.pointer = ptr;
-        entry.file_identifier = file_id;
-        entry.state = state;
-        
-        index_database[entry.Ts].push_back(entry);
-        keyword_count++;
+    } else {
+        entry.TS_F.push_back(ts_f_array.asString());
     }
     
-    std::cout << "   关键词数: " << keyword_count << std::endl;
+    std::cout << "   认证标签数量: " << entry.TS_F.size() << std::endl;
+    
+    // 解析关键词信息
+    Json::Value keywords_array = params["keywords"];
+    if (!keywords_array.isArray()) {
+        std::cerr << "❌ keywords 字段格式错误（应为数组）" << std::endl;
+        return false;
+    }
+    
+    std::cout << "   关键词数量: " << keywords_array.size() << std::endl;
+    
+    // 处理每个关键词
+    for (const auto& kw : keywords_array) {
+        // 检查必需字段：Ti_bar 和 kt_wi
+        if (!kw.isMember("Ti_bar") || !kw.isMember("kt_wi")) {
+            std::cerr << "❌ 关键词格式错误（缺少 Ti_bar 或 kt_wi）" << std::endl;
+            return false;
+        }
+        
+        std::string Ti_bar = kw["Ti_bar"].asString();  // 状态令牌（也是搜索令牌）
+        std::string kt_wi = kw["kt_wi"].asString();    // 关键词标签
+        
+        // ptr_i 字段是可选的，如果存在则使用，否则使用 ID_F
+        std::string ptr_i = ID_F;  // 默认值
+        if (kw.isMember("ptr_i")) {
+            ptr_i = kw["ptr_i"].asString();
+        }
+        
+        // 创建 IndexKeywords 结构
+        IndexKeywords idx_kw;
+        idx_kw.ptr_i = ptr_i;      // 使用提供的指针或文件ID
+        idx_kw.kt_wi = kt_wi;      // 关键词标签
+        idx_kw.Ti_bar = Ti_bar;    // 状态令牌
+        
+        entry.keywords.push_back(idx_kw);
+        
+        std::cout << "   ✅ 已添加关键词索引: " << Ti_bar.substr(0, 16) << "..." << std::endl;
+    }
+    
+    // 修改：直接使用 ID_F 作为键存储到 index_database
+    index_database[ID_F] = entry;
+    
+    
+    // 保存加密文件到磁盘
+    if (!save_encrypted_file(ID_F, enc_file_path)) {
+        std::cerr << "⚠️  加密文件保存失败" << std::endl;
+    }
     
     // 保存元数据
     Json::Value metadata;
+    metadata["ID_F"] = ID_F;
     metadata["PK"] = PK;
-    metadata["file_id"] = file_id;
-    metadata["file_size"] = static_cast<int>(ciphertext.length());
-    metadata["keyword_count"] = keyword_count;
     metadata["state"] = state;
-    metadata["insert_time"] = get_current_timestamp();
-    metadata["success"] = true;
+    metadata["file_path"] = entry.file_path;
+    metadata["inserted_at"] = get_current_timestamp();
+    metadata["ciphertext_size"] = (Json::UInt64)ciphertext.size();
     
-    std::string metadata_path = metadata_dir + "/" + file_id + ".json";
+    // 保存 TS_F
+    Json::Value ts_f_json(Json::arrayValue);
+    for (const auto& tag : entry.TS_F) {
+        ts_f_json.append(tag);
+    }
+    metadata["TS_F"] = ts_f_json;
+    
+    // 保存 keywords
+    Json::Value keywords_json(Json::arrayValue);
+    for (const auto& kw : entry.keywords) {
+        Json::Value kw_obj;
+        kw_obj["ptr_i"] = kw.ptr_i;
+        kw_obj["kt_wi"] = kw.kt_wi;
+        kw_obj["Ti_bar"] = kw.Ti_bar;
+        keywords_json.append(kw_obj);
+    }
+    metadata["keywords"] = keywords_json;
+    
+    std::string metadata_path = metadata_dir + "/" + ID_F + ".json";
     save_json_to_file(metadata, metadata_path);
     
     // 保存更新
@@ -913,130 +1040,99 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
 }
 
 bool StorageNode::delete_file(const std::string& PK, const std::string& file_id, const std::string& del_proof) {
-    std::cout << "\n🗑️  删除文件: " << file_id << std::endl;
+    // 函数体保持空白 - 待后续实现
+    std::cout << "\n🗑️  删除文件功能待实现" << std::endl;
+    std::cout << "   文件ID: " << file_id << std::endl;
     std::cout << "   请求者PK: " << PK.substr(0, 16) << "..." << std::endl;
-    
-    // 验证PK格式
-    if (!verify_pk_format(PK)) {
-        std::cerr << "❌ PK格式无效" << std::endl;
-        return false;
-    }
-    
-    if (!has_file(file_id)) {
-        std::cerr << "❌ 文件不存在" << std::endl;
-        return false;
-    }
-    
-    // 验证文件所有权
-    const FileData& file_data = file_storage[file_id];
-    if (file_data.PK != PK) {
-        std::cerr << "❌ 权限不足: 您不是此文件的所有者" << std::endl;
-        std::cerr << "   文件所有者PK: " << file_data.PK.substr(0, 16) << "..." << std::endl;
-        return false;
-    }
-    
-    std::cout << "   ✅ 身份验证通过" << std::endl;
-    
-    // 标记索引为无效 (state = "invalid")
-    int marked_count = 0;
-    for (auto& pair : index_database) {
-        for (auto& entry : pair.second) {
-            if (entry.file_identifier == file_id && entry.PK == PK) {
-                entry.state = "invalid";
-                marked_count++;
-            }
-        }
-    }
-    
-    std::cout << "   标记 " << marked_count << " 条索引为无效" << std::endl;
-    
-    // 更新文件状态
-    file_storage[file_id].state = "invalid";
-    
-    // 保存更新
-    save_index_database();
-    update_statistics("delete");
-    
-    std::cout << "✅ 文件删除成功 (已标记为无效)" << std::endl;
-    return true;
+    return false;
 }
 
 SearchResult StorageNode::search_keyword(const std::string& PK,
                                         const std::string& search_token, 
-                                        const std::string& latest_state,
-                                        const std::string& seed) {
+                                        const std::string& latest_state) {
     SearchResult result;
     
-    std::cout << "\n🔍 搜索关键词..." << std::endl;
+    // 函数体保持空白 - 待后续实现
+    std::cout << "\n🔍 搜索关键词功能待实现" << std::endl;
     std::cout << "   请求者PK: " << PK.substr(0, 16) << "..." << std::endl;
     std::cout << "   搜索令牌: " << search_token.substr(0, 16) << "..." << std::endl;
-    
-    // 验证PK格式
-    if (!verify_pk_format(PK)) {
-        std::cerr << "❌ PK格式无效" << std::endl;
-        return result;
-    }
-    
-    // 在索引数据库中查找
-    auto it = index_database.find(search_token);
-    if (it != index_database.end()) {
-        for (const auto& entry : it->second) {
-            // 只返回该PK的文件且状态为valid的条目
-            if (entry.PK == PK && entry.state == "valid") {
-                result.file_identifiers.push_back(entry.file_identifier);
-                result.keyword_proofs.push_back(entry.keyword);
-            }
-        }
-    }
-    
-    std::cout << "   找到 " << result.file_identifiers.size() << " 个匹配文件" << std::endl;
     
     return result;
 }
 
 std::string StorageNode::generate_integrity_proof(const std::string& file_id, 
                                                   const std::string& seed) {
-    if (!has_file(file_id)) {
-        return "";
-    }
-    
-    const FileData& data = file_storage[file_id];
-    
-    // 生成完整性证明
-    std::string combined = file_id + data.file_auth_tag + seed;
-    return compute_hash_H1(combined);
+    // 函数体为空 - 根据用户要求保持不实现
+    return "";
 }
 
-// ==================== 检索函数 ====================
+// ==================== 检索函数 (重写) ====================
 
 Json::Value StorageNode::retrieve_file(const std::string& file_id) {
     Json::Value result;
     
-    if (!has_file(file_id)) {
+    std::cout << "\n📥 检索文件: " << file_id << std::endl;
+    
+    // 在 index_database 中查找 ID_F
+    auto it = index_database.find(file_id);
+    if (it == index_database.end()) {
+        std::cerr << "❌ 文件不存在" << std::endl;
         result["success"] = false;
         result["error"] = "文件不存在";
         return result;
     }
     
-    const FileData& data = file_storage[file_id];
+    const IndexEntry& entry = it->second;
     
+    // 可选：验证 PK（如果需要身份验证，可以添加 PK 参数）
+    // 这里暂时不验证，直接返回文件信息
+    
+    std::cout << "   ✅ 找到文件" << std::endl;
+    std::cout << "   PK: " << entry.PK.substr(0, 16) << "..." << std::endl;
+    std::cout << "   状态: " << entry.state << std::endl;
+    
+    // 构造返回结果
     result["success"] = true;
-    result["PK"] = data.PK;
-    result["file_id"] = file_id;
-    result["ciphertext"] = data.ciphertext;
-    result["pointer"] = data.pointer;
-    result["file_auth_tag"] = data.file_auth_tag;
-    result["state"] = data.state;
+    result["file_id"] = entry.ID_F;
+    result["PK"] = entry.PK;
+    result["state"] = entry.state;
+    result["file_path"] = entry.file_path;
     
-    return result;
-}
-
-Json::Value StorageNode::retrieve_files_batch(const std::vector<std::string>& file_ids) {
-    Json::Value result;
-    result["files"] = Json::arrayValue;
+    // 读取加密文件内容
+    std::string ciphertext;
+    if (load_encrypted_file(file_id, ciphertext)) {
+        result["ciphertext"] = ciphertext;
+    } else {
+        result["ciphertext"] = "";
+        std::cerr << "⚠️  无法读取加密文件" << std::endl;
+    }
     
-    for (const auto& file_id : file_ids) {
-        result["files"].append(retrieve_file(file_id));
+    // TS_F
+    Json::Value ts_f_array(Json::arrayValue);
+    for (const auto& ts : entry.TS_F) {
+        ts_f_array.append(ts);
+    }
+    result["TS_F"] = ts_f_array;
+    
+    // 提取第一个 TS_F 作为 file_auth_tag（兼容旧接口）
+    if (!entry.TS_F.empty()) {
+        result["file_auth_tag"] = entry.TS_F[0];
+    }
+    
+    // keywords
+    Json::Value keywords_array(Json::arrayValue);
+    for (const auto& kw : entry.keywords) {
+        Json::Value kw_obj;
+        kw_obj["ptr_i"] = kw.ptr_i;
+        kw_obj["kt_wi"] = kw.kt_wi;
+        kw_obj["Ti_bar"] = kw.Ti_bar;
+        keywords_array.append(kw_obj);
+    }
+    result["keywords"] = keywords_array;
+    
+    // 提取第一个 ptr_i 作为 pointer（兼容旧接口）
+    if (!entry.keywords.empty()) {
+        result["pointer"] = entry.keywords[0].ptr_i;
     }
     
     return result;
@@ -1091,7 +1187,7 @@ bool StorageNode::load_encrypted_file(const std::string& file_id, std::string& c
 std::vector<std::string> StorageNode::list_all_files() {
     std::vector<std::string> file_list;
     
-    for (const auto& pair : file_storage) {
+    for (const auto& pair : index_database) {
         file_list.push_back(pair.first);
     }
     
@@ -1101,7 +1197,7 @@ std::vector<std::string> StorageNode::list_all_files() {
 std::vector<std::string> StorageNode::list_files_by_pk(const std::string& PK) {
     std::vector<std::string> file_list;
     
-    for (const auto& pair : file_storage) {
+    for (const auto& pair : index_database) {
         if (pair.second.PK == PK) {
             file_list.push_back(pair.first);
         }
@@ -1124,13 +1220,13 @@ void StorageNode::print_detailed_status() {
     std::cout << "   版本:         v3.4 (改进的参数序列化)" << std::endl;
     
     std::cout << "\n📦 存储统计:" << std::endl;
-    std::cout << "   文件总数:     " << file_storage.size() << std::endl;
+    std::cout << "   文件总数:     " << index_database.size() << std::endl;
     std::cout << "   索引总数:     " << get_index_count() << std::endl;
     
     // 统计各状态文件数
     int valid_count = 0;
     int invalid_count = 0;
-    for (const auto& pair : file_storage) {
+    for (const auto& pair : index_database) {
         if (pair.second.state == "valid") {
             valid_count++;
         } else {
@@ -1143,17 +1239,16 @@ void StorageNode::print_detailed_status() {
     std::cout << "\n🔐 密码学状态:" << std::endl;
     std::cout << "   初始化:       " << (crypto_initialized ? "✅ 是" : "❌ 否") << std::endl;
     
-    if (!file_storage.empty()) {
+    if (!index_database.empty()) {
         std::cout << "\n📄 文件列表:" << std::endl;
         int count = 0;
-        for (const auto& pair : file_storage) {
+        for (const auto& pair : index_database) {
             count++;
             std::cout << "   [" << count << "] " << pair.first 
-                     << " (" << pair.second.ciphertext.length() << " 字节, "
-                     << "PK: " << pair.second.PK.substr(0, 8) << "..., "
+                     << " (PK: " << pair.second.PK.substr(0, 8) << "..., "
                      << "状态: " << pair.second.state << ")" << std::endl;
             if (count >= 10) {
-                std::cout << "   ... (还有 " << (file_storage.size() - 10) << " 个文件)" << std::endl;
+                std::cout << "   ... (还有 " << (index_database.size() - 10) << " 个文件)" << std::endl;
                 break;
             }
         }

@@ -1,14 +1,14 @@
 {
     "node" : 
     {
-        "created_at" : "2025-11-11T15:57:21Z",
+        "created_at" : "2025-11-12T16:42:02Z",
         "description" : "\u53bb\u4e2d\u5fc3\u5316\u5b58\u50a8\u8282\u70b9 (\u652f\u6301\u516c\u5171\u53c2\u6570\u6301\u4e45\u5316)",
-        "node_id" : "node_1762847841"
+        "node_id" : "node_1762936922"
     },
     "paths" : 
     {
         "data_dir" : "./data",
-        "files_dir" : "./data/files",
+        "files_dir" : "./data/EncFiles",
         "index_db" : "./data/index_db.json",
         "metadata_dir" : "./data/metadata",
         "public_params" : "./data/public_params.json"
@@ -23,5 +23,5 @@
         "enable_compression" : false,
         "max_file_size_mb" : 100
     },
-    "version" : "3.2"
+    "version" : "3.4"
 }

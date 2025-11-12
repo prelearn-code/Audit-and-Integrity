@@ -6,7 +6,7 @@
 
 void printUsage() {
     std::cout << "\n=========================================" << std::endl;
-    std::cout << "  本地加密存储工具 v4.0" << std::endl;
+    std::cout << "  本地加密存储工具 v4.1" << std::endl;
     std::cout << "=========================================" << std::endl;
     std::cout << "\n🔧 系统设置:" << std::endl;
     std::cout << "  1.  init           - 初始化系统（从 public_params.json 加载参数）" << std::endl;
@@ -14,26 +14,26 @@ void printUsage() {
     std::cout << "  3.  save-keys      - 保存密钥到文件" << std::endl;
     std::cout << "  4.  load-keys      - 从文件加载密钥" << std::endl;
     std::cout << "\n📁 文件操作:" << std::endl;
-    std::cout << "  5.  encrypt        - 加密文件（生成 .enc, insert.json, metadata.json）" << std::endl;
+    std::cout << "  5.  encrypt        - 加密文件（自动管理所有输出文件）" << std::endl;
     std::cout << "  6.  decrypt        - 解密文件" << std::endl;
-    std::cout << "\n📊 状态管理:" << std::endl;
-    std::cout << "  10. load-states    - 加载关键词状态文件" << std::endl;
-    std::cout << "  11. save-states    - 保存关键词状态文件" << std::endl;
-    std::cout << "  12. query-state    - 查询关键词当前状态" << std::endl;
+    std::cout << "\n📊 状态查询:" << std::endl;
+    std::cout << "  10. query-state    - 查询关键词当前状态" << std::endl;
     std::cout << "\n📖 其他:" << std::endl;
-    std::cout << "  13. help           - 显示帮助" << std::endl;
-    std::cout << "  14. quit           - 退出" << std::endl;
+    std::cout << "  11. help           - 显示帮助" << std::endl;
+    std::cout << "  12. quit           - 退出" << std::endl;
     std::cout << "=========================================\n" << std::endl;
 }
 
 void printBanner() {
     std::cout << "==================================================" << std::endl;
-    std::cout << "  🔐 本地加密存储工具 - v4.0" << std::endl;
-    std::cout << "  可验证的可搜索加密系统（方案A重构版）" << std::endl;
-    std::cout << "  ⭐ v4.0 新特性:" << std::endl;
-    std::cout << "     - 统一使用 public_params.json" << std::endl;
-    std::cout << "     - 配对参数硬编码（Type A曲线）" << std::endl;
-    std::cout << "     - 修复参数不一致问题" << std::endl;
+    std::cout << "  🔐 本地加密存储工具 - v4.1" << std::endl;
+    std::cout << "  可验证的可搜索加密系统（目录结构重构版）" << std::endl;
+    std::cout << "  ⭐ v4.1 新特性:" << std::endl;
+    std::cout << "     - 统一数据目录管理（./data）" << std::endl;
+    std::cout << "     - 自动创建目录结构" << std::endl;
+    std::cout << "     - 使用原始文件名" << std::endl;
+    std::cout << "     - 自动更新 keyword_states.json" << std::endl;
+    std::cout << "     - 文件冲突时自动添加时间戳" << std::endl;
     std::cout << "==================================================" << std::endl;
 }
 
@@ -41,7 +41,7 @@ void printInitializationGuide() {
     std::cout << "\n┌─────────────────────────────────────────┐" << std::endl;
     std::cout << "│  📘 初始化指南（重要！）                │" << std::endl;
     std::cout << "├─────────────────────────────────────────┤" << std::endl;
-    std::cout << "│  v4.0 简化了初始化流程：                │" << std::endl;
+    std::cout << "│  v4.1 简化了初始化和文件管理：          │" << std::endl;
     std::cout << "│                                         │" << std::endl;
     std::cout << "│  1️⃣  获取 public_params.json           │" << std::endl;
     std::cout << "│     从 Storage Node 获取此文件          │" << std::endl;
@@ -49,17 +49,38 @@ void printInitializationGuide() {
     std::cout << "│                                         │" << std::endl;
     std::cout << "│  2️⃣  初始化系统                        │" << std::endl;
     std::cout << "│     运行命令: init                      │" << std::endl;
-    std::cout << "│     系统会自动加载所有参数              │" << std::endl;
+    std::cout << "│     系统会自动：                        │" << std::endl;
+    std::cout << "│     • 加载所有参数                      │" << std::endl;
+    std::cout << "│     • 创建 ./data 目录结构              │" << std::endl;
+    std::cout << "│     • 初始化 keyword_states.json        │" << std::endl;
     std::cout << "│                                         │" << std::endl;
     std::cout << "│  3️⃣  生成密钥                          │" << std::endl;
     std::cout << "│     运行命令: keygen                    │" << std::endl;
     std::cout << "│     生成 private_key.dat + public_key.json │" << std::endl;
     std::cout << "│                                         │" << std::endl;
+    std::cout << "│  4️⃣  加密文件                          │" << std::endl;
+    std::cout << "│     运行命令: encrypt                   │" << std::endl;
+    std::cout << "│     只需指定：                          │" << std::endl;
+    std::cout << "│     • 文件路径                          │" << std::endl;
+    std::cout << "│     • 关键词                            │" << std::endl;
+    std::cout << "│     系统自动管理其他所有文件！          │" << std::endl;
+    std::cout << "│                                         │" << std::endl;
     std::cout << "│  ⚠️  注意事项:                          │" << std::endl;
-    std::cout << "│  - 不再需要 system_params.json         │" << std::endl;
-    std::cout << "│  - 配对参数已硬编码到程序中            │" << std::endl;
-    std::cout << "│  - 必须先 init 再 keygen               │" << std::endl;
+    std::cout << "│  - 所有文件自动保存到 ./data 目录       │" << std::endl;
+    std::cout << "│  - keyword_states.json 自动更新         │" << std::endl;
+    std::cout << "│  - 文件重复时自动添加时间戳后缀         │" << std::endl;
     std::cout << "└─────────────────────────────────────────┘\n" << std::endl;
+}
+
+void printDataDirectoryStructure() {
+    std::cout << "\n📂 数据目录结构:" << std::endl;
+    std::cout << "./data/" << std::endl;
+    std::cout << "├── Insert/           # insert.json 文件（供 Storage Node）" << std::endl;
+    std::cout << "├── EncFiles/         # 加密文件 (.enc)" << std::endl;
+    std::cout << "├── MetaFiles/        # 元数据文件" << std::endl;
+    std::cout << "├── Search/           # 预留：搜索操作文件" << std::endl;
+    std::cout << "├── Delete/           # 预留：删除操作文件" << std::endl;
+    std::cout << "└── keyword_states.json  # 关键词状态（自动维护）\n" << std::endl;
 }
 
 int main() {
@@ -68,7 +89,7 @@ int main() {
     StorageClient client;
     
     // ========================================
-    // 检查 public_params.json（唯一必需的参数文件）
+    // v4.1新增：检查 public_params.json
     // ========================================
     std::ifstream pub_params_check("public_params.json");
     if (!pub_params_check.good()) {
@@ -82,6 +103,7 @@ int main() {
     pub_params_check.close();
     
     printInitializationGuide();
+    printDataDirectoryStructure();
     printUsage();
     
     std::string command;
@@ -110,7 +132,16 @@ int main() {
                 
                 if (client.initialize(pub_params_file)) {
                     std::cout << "\n✅ 系统初始化成功" << std::endl;
-                    std::cout << "💡 下一步: 运行 'keygen' 生成密钥" << std::endl;
+                    
+                    // ========== v4.1新增：自动初始化数据目录 ==========
+                    std::cout << "\n🔧 初始化数据目录结构..." << std::endl;
+                    if (client.initializeDataDirectories()) {
+                        std::cout << "✅ 数据目录初始化完成" << std::endl;
+                        std::cout << "\n💡 下一步: 运行 'keygen' 生成密钥" << std::endl;
+                    } else {
+                        std::cerr << "❌ 数据目录初始化失败" << std::endl;
+                        std::cerr << "   请检查文件系统权限" << std::endl;
+                    }
                 } else {
                     std::cerr << "\n❌ 系统初始化失败" << std::endl;
                     std::cerr << "💡 请检查:" << std::endl;
@@ -189,25 +220,14 @@ int main() {
                     continue;
                 }
                 
-                std::string output_prefix;
-                std::cout << "💾 输出文件前缀（将生成 .enc 和相关 JSON）: ";
-                std::cin >> output_prefix;
+                // ========== v4.1简化：不再需要用户输入输出路径 ==========
+                std::cout << "\n🔒 开始加密..." << std::endl;
+                std::cout << "💡 所有文件将自动保存到 ./data 目录" << std::endl;
                 
-                std::string insert_json_path;
-                std::cout << "💾 insert.json 输出路径（按回车使用默认: insert.json）: ";
-                std::cin.ignore();
-                std::getline(std::cin, insert_json_path);
-                
-                if (insert_json_path.empty()) {
-                    insert_json_path = "insert.json";
-                }
-                
-                if (client.encryptFile(file_path, keywords, output_prefix, insert_json_path)) {
+                if (client.encryptFile(file_path, keywords)) {
                     std::cout << "\n✅ 加密完成！" << std::endl;
-                    std::cout << "📦 生成的文件:" << std::endl;
-                    std::cout << "   - " << output_prefix << ".enc（加密文件）" << std::endl;
-                    std::cout << "   - " << insert_json_path << "（供 Storage Node 使用）" << std::endl;
-                    std::cout << "   - " << file_path << "_metadata.json（本地元数据）" << std::endl;
+                    std::cout << "📂 所有文件已保存到 ./data 目录下的对应子目录" << std::endl;
+                    std::cout << "   查看详细信息请查看上方的输出" << std::endl;
                 } else {
                     std::cerr << "❌ 文件加密失败" << std::endl;
                 }
@@ -227,30 +247,10 @@ int main() {
                     std::cerr << "❌ 文件解密失败" << std::endl;
                 }
             }
-            // ============ 状态管理命令 ============
-            else if (command == "load-states" || command == "10") {
-                std::string state_file;
-                std::cout << "\n📂 输入状态文件路径: ";
-                std::cin >> state_file;
-                
-                if (client.loadKeywordStates(state_file)) {
-                    std::cout << "✅ 状态文件加载成功" << std::endl;
-                } else {
-                    std::cerr << "❌ 状态文件加载失败" << std::endl;
-                }
-            }
-            else if (command == "save-states" || command == "11") {
-                std::string state_file;
-                std::cout << "\n💾 输入保存路径: ";
-                std::cin >> state_file;
-                
-                if (client.saveKeywordStates(state_file)) {
-                    std::cout << "✅ 状态文件保存成功: " << state_file << std::endl;
-                } else {
-                    std::cerr << "❌ 状态文件保存失败" << std::endl;
-                }
-            }
-            else if (command == "query-state" || command == "12") {
+            // ========== v4.1修改：移除状态文件手动管理命令 ==========
+            // 状态文件现在自动管理，用户无需手动加载或保存
+            
+            else if (command == "query-state" || command == "10") {
                 std::string keyword;
                 std::cout << "\n🔍 输入要查询的关键词: ";
                 std::cin >> keyword;
@@ -258,16 +258,19 @@ int main() {
                 std::string result = client.queryKeywordState(keyword);
                 std::cout << result << std::endl;
             }
-            else if (command == "help" || command == "13") {
+            else if (command == "help" || command == "11") {
                 printUsage();
+                printDataDirectoryStructure();
             }
-            else if (command == "quit" || command == "exit" || command == "14") {
-                std::cout << "\n👋 感谢使用本地加密存储工具 v4.0！" << std::endl;
-                std::cout << "   记得保存您的密钥文件和状态文件。\n" << std::endl;
+            else if (command == "quit" || command == "exit" || command == "12") {
+                std::cout << "\n👋 感谢使用本地加密存储工具 v4.1！" << std::endl;
+                std::cout << "   所有数据已保存在 ./data 目录中。" << std::endl;
+                std::cout << "   记得保护好您的密钥文件！\n" << std::endl;
                 running = false;
             }
             else {
-                std::cerr << "❌ 未知命令。输入 'help' 查看帮助。" << std::endl;
+                std::cerr << "❌ 未知命令: " << command << std::endl;
+                std::cerr << "   输入 'help' 查看帮助。" << std::endl;
             }
             
         } catch (const std::exception& e) {

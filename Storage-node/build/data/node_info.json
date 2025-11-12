@@ -1,10 +1,10 @@
 {
-    "last_update" : "2025-11-11T15:57:21Z",
-    "node_id" : "node_1762847841",
+    "last_update" : "2025-11-12T18:18:56Z",
+    "node_id" : "node_1762936922",
     "statistics" : 
     {
-        "total_files" : 0,
-        "total_indices" : 0
+        "total_files" : 2,
+        "total_indices" : 2
     },
-    "version" : "3.2"
+    "version" : "3.4"
 }
