@@ -10,6 +10,7 @@ void signal_handler(int signal) {
     std::cout << "\n\n🛑 正在优雅地关闭存储节点..." << std::endl;
     if (g_node) {
         g_node->save_index_database();
+        g_node->save_search_database();
         g_node->save_node_info();
         delete g_node;
     }
@@ -550,11 +551,18 @@ int main(int argc, char* argv[]) {
         }
         
         // 步骤 4: 加载索引数据库
-        std::cout << "\n[4/4] 💾 加载数据..." << std::endl;
+        std::cout << "\n[4/5] 💾 加载索引数据库..." << std::endl;
         if (!g_node->load_index_database()) {
             std::cerr << "❌ 索引数据库加载失败" << std::endl;
             delete g_node;
             return 1;
+        }
+        
+        // 步骤 5: 加载搜索数据库
+        std::cout << "\n[5/5] 🔍 加载搜索数据库..." << std::endl;
+        if (!g_node->load_search_database()) {
+            std::cerr << "⚠️  搜索数据库加载失败，已创建新数据库" << std::endl;
+            // 注意：这里不退出，因为可以创建新的搜索数据库
         }
         
         // 加载节点信息
@@ -624,6 +632,7 @@ int main(int argc, char* argv[]) {
                 case 0:
                     std::cout << "\n👋 再见!" << std::endl;
                     g_node->save_index_database();
+                    g_node->save_search_database();
                     g_node->save_node_info();
                     delete g_node;
                     return 0;

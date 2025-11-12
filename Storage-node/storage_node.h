@@ -33,6 +33,15 @@ struct IndexEntry {
     std::vector<IndexKeywords> keywords;   // 关联信息的集合
 };
 
+// 搜索索引条目：用于快速搜索功能，以 Ti_bar 为键进行索引
+struct IndexSearchEntry {
+    std::string Ti_bar;    // 插入文件的状态令牌（作为唯一键）
+    std::string ID_F;      // 文件ID
+    std::string ptr_i;     // 关键词状态指针
+    std::string state;     // 文件状态: "valid" 或 "invalid"
+    std::string kt_wi;     // 关键词关联标签
+};
+
 struct SearchResult {
     std::vector<std::string> ID_F;
     std::vector<std::string> keyword_proofs;
@@ -66,6 +75,9 @@ private:
     // 存储（统一使用IndexEntry，以ID_F为键）
     // 修改说明：index_database 现在以 ID_F 作为 key，每个文件对应一个 IndexEntry
     std::map<std::string, IndexEntry> index_database;
+    
+    // 搜索索引数据库（以 Ti_bar 为键，用于快速搜索）
+    std::map<std::string, IndexSearchEntry> search_database;
     
     // 配置
     std::string node_id;
@@ -187,6 +199,16 @@ public:
      * 新格式: 生成 file_count, ID_Fs, database 字段
      */
     bool save_index_database();
+    
+    /**
+     * load_search_database() - 从文件加载搜索数据库
+     */
+    bool load_search_database();
+    
+    /**
+     * save_search_database() - 保存搜索数据库到文件
+     */
+    bool save_search_database();
     
     // ========== 节点信息 ==========
     
@@ -316,6 +338,10 @@ public:
     
     size_t get_index_count() const {
         return index_database.size();
+    }
+    
+    size_t get_search_index_count() const {
+        return search_database.size();
     }
     
     bool has_file(const std::string& file_id) const {

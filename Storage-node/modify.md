@@ -1,35 +1,66 @@
-# 函数实现问题
+# 新的搜索使用的索引数据库
 
-## 数据库相关的
-### 数据库设计
-```JSON
+## 数据结构
+
+### 新的结构体
+
+```C++
+struct IndexSearchEntry
 {
-  "last_update":"times",//最新更新时间，精确到秒
-  "file_count": 3,                          // 新增：文件总数
-  "ID_Fs": ["ID_F1", "ID_F2", "ID_F3"],   // 新增：文件ID索引列表
-  "database": [                            // 修改：原来的索引数据
-    {
-      "ID_F": "58596621420790973770...",   // 文件唯一标识
-      "file_path": "enc.enc",              // 加密文件存储路径
-      "PK": "932fec9942585339b445...",     // 客户端公钥
-      "TS_F": ["988ffd60...", "7068fe..."], // 文件认证标签集合
-      "keywords": [                        // 关键词索引
-        {
-          "Ti_bar": "a4d04362...",         // 状态令牌
-          "kt_wi": "33faaf63...",          // 关键词标签
-          "ptr_i": "addceb6b..."           // 状态指针
-        }
-      ],
-      "state": "valid"                     // 文件状态
-    }
-  ]
+  std::string Ti_bar:"插入文件的Ti_bar";
+  std::string ID_F: "文件ID";//文件ID
+  std::string ptr_i:"ptr_i";//关键词状态指针
+  std::string state:"valid/invalid";//文件状态
+  std::string kt_wi:"kt_wi";
 }
 ```
 
-### load_index_database
-根据新设计的数据库，进行读取文件到内存。
+其中，这些变量都跟insert.json的数据对应。
 
-### save_index_database
+一个insert.json文件,对应多个IndexSearchEntry，其中的每个keywords对应的内容，都对应一个IndexSearchEntry结构体。
+
+### 新的映射关系
+
+设计新的映射关系
+
+```C++
+std::map<std::string,IndexSearchEntry>search_database;
+```
+
+其中，string对应的是Ti_bar, IndexSearchEntry对应结构体,以Ti_bar做为唯一标识
 
 
+## 创建新的search_db.json
 
+### 结构
+
+```JSON
+{
+    {
+        "Ti_bar": "Ti_bar的数值"，
+        "ID_F":"文件ID的数值"，
+        "ptr_i":"状态指针数值"，
+        "state":"文件状态"，
+        "kt_wi":"kt_wi"
+     }
+    {
+        "Ti_bar": "Ti_bar的数值"，
+        "ID_F":"文件ID的数值"，
+        "ptr_i":"状态指针数值"，
+        "state":"文件状态"，
+        "kt_wi":"kt_wi"
+     }
+    {
+        "Ti_bar": "Ti_bar的数值"，
+        "ID_F":"文件ID的数值"，
+        "ptr_i":"状态指针数值"，
+        "state":"文件状态"，
+        "kt_wi":"kt_wi"
+     }
+}
+```
+
+### 创建与更新这个文件
+
+1. 创建：系统开始就创建，类似于index_db.json
+2. 更新：首先插入文件操作时，需要把一个insert.json对应的多个IndexSearchEntry结构体插入到这个文件中，进行更新。

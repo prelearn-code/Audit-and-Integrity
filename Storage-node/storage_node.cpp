@@ -1031,6 +1031,29 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     std::string metadata_path = metadata_dir + "/" + ID_F + ".json";
     save_json_to_file(metadata, metadata_path);
     
+    // ========== 更新搜索数据库 ==========
+    std::cout << "\n🔍 更新搜索数据库..." << std::endl;
+    
+    // 为每个关键词创建一个 IndexSearchEntry
+    for (const auto& kw : entry.keywords) {
+        IndexSearchEntry search_entry;
+        search_entry.Ti_bar = kw.Ti_bar;
+        search_entry.ID_F = ID_F;
+        search_entry.ptr_i = kw.ptr_i;
+        search_entry.state = entry.state;
+        search_entry.kt_wi = kw.kt_wi;
+        
+        // 以 Ti_bar 为键插入到搜索数据库
+        search_database[search_entry.Ti_bar] = search_entry;
+        
+        std::cout << "   ✅ 添加搜索索引: Ti_bar=" << kw.Ti_bar.substr(0, 16) << "..." << std::endl;
+    }
+    
+    std::cout << "   📊 当前搜索索引总数: " << search_database.size() << std::endl;
+    
+    // 保存搜索数据库
+    save_search_database();
+    
     // 保存更新
     save_index_database();
     update_statistics("insert");
@@ -1220,8 +1243,9 @@ void StorageNode::print_detailed_status() {
     std::cout << "   版本:         v3.4 (改进的参数序列化)" << std::endl;
     
     std::cout << "\n📦 存储统计:" << std::endl;
-    std::cout << "   文件总数:     " << index_database.size() << std::endl;
-    std::cout << "   索引总数:     " << get_index_count() << std::endl;
+    std::cout << "   文件总数:        " << index_database.size() << std::endl;
+    std::cout << "   索引总数:        " << get_index_count() << std::endl;
+    std::cout << "   搜索索引总数:    " << search_database.size() << std::endl;
     
     // 统计各状态文件数
     int valid_count = 0;
@@ -1261,4 +1285,120 @@ void StorageNode::print_detailed_status() {
 
 bool StorageNode::has_public_params_file(const std::string& filepath) const {
     return file_exists(filepath);
+}
+
+// ==================== 搜索数据库操作 ====================
+
+bool StorageNode::load_search_database() {
+    std::string search_db_path = data_dir + "/search_db.json";
+    
+    std::cout << "📥 加载搜索数据库..." << std::endl;
+    std::cout << "   文件路径: " << search_db_path << std::endl;
+    
+    // 检查文件是否存在
+    if (!file_exists(search_db_path)) {
+        std::cout << "   ⚠️  搜索数据库文件不存在，创建新的空数据库" << std::endl;
+        
+        // 创建空的搜索数据库文件
+        Json::Value root;
+        root["version"] = "1.0";
+        root["created_at"] = get_current_timestamp();
+        root["description"] = "Search Database for Quick Keyword Lookup";
+        root["search_index_count"] = 0;
+        root["search_database"] = Json::Value(Json::arrayValue);
+        
+        if (!save_json_to_file(root, search_db_path)) {
+            std::cerr << "   ❌ 创建搜索数据库文件失败" << std::endl;
+            return false;
+        }
+        
+        std::cout << "   ✅ 已创建新的搜索数据库文件" << std::endl;
+        return true;
+    }
+    
+    // 加载现有文件
+    Json::Value root = load_json_from_file(search_db_path);
+    
+    if (!root.isMember("search_database")) {
+        std::cerr << "   ❌ 搜索数据库格式错误：缺少 search_database 字段" << std::endl;
+        return false;
+    }
+    
+    // 清空当前搜索数据库
+    search_database.clear();
+    
+    // 加载搜索索引条目
+    const Json::Value& search_db = root["search_database"];
+    for (const auto& entry : search_db) {
+        IndexSearchEntry search_entry;
+        
+        // 提取字段
+        if (entry.isMember("Ti_bar")) {
+            search_entry.Ti_bar = entry["Ti_bar"].asString();
+        }
+        if (entry.isMember("ID_F")) {
+            search_entry.ID_F = entry["ID_F"].asString();
+        }
+        if (entry.isMember("ptr_i")) {
+            search_entry.ptr_i = entry["ptr_i"].asString();
+        }
+        if (entry.isMember("state")) {
+            search_entry.state = entry["state"].asString();
+        }
+        if (entry.isMember("kt_wi")) {
+            search_entry.kt_wi = entry["kt_wi"].asString();
+        }
+        
+        // 以 Ti_bar 为键插入到映射中
+        if (!search_entry.Ti_bar.empty()) {
+            search_database[search_entry.Ti_bar] = search_entry;
+        }
+    }
+    
+    std::cout << "   ✅ 搜索数据库加载成功" << std::endl;
+    std::cout << "   📊 搜索索引数量: " << search_database.size() << std::endl;
+    
+    return true;
+}
+
+bool StorageNode::save_search_database() {
+    std::string search_db_path = data_dir + "/search_db.json";
+    
+    Json::Value root;
+    
+    // 基本信息
+    root["version"] = "1.0";
+    root["updated_at"] = get_current_timestamp();
+    root["description"] = "Search Database for Quick Keyword Lookup";
+    root["search_index_count"] = static_cast<int>(search_database.size());
+    
+    // 序列化搜索数据库
+    Json::Value search_db_array(Json::arrayValue);
+    
+    for (const auto& pair : search_database) {
+        const IndexSearchEntry& entry = pair.second;
+        
+        Json::Value entry_json;
+        entry_json["Ti_bar"] = entry.Ti_bar;
+        entry_json["ID_F"] = entry.ID_F;
+        entry_json["ptr_i"] = entry.ptr_i;
+        entry_json["state"] = entry.state;
+        entry_json["kt_wi"] = entry.kt_wi;
+        
+        search_db_array.append(entry_json);
+    }
+    
+    root["search_database"] = search_db_array;
+    
+    // 保存到文件
+    bool success = save_json_to_file(root, search_db_path);
+    
+    if (success) {
+        std::cout << "   💾 搜索数据库已保存: " << search_db_path << std::endl;
+        std::cout << "   📊 搜索索引数量: " << search_database.size() << std::endl;
+    } else {
+        std::cerr << "   ❌ 搜索数据库保存失败" << std::endl;
+    }
+    
+    return success;
 }
