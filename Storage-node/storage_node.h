@@ -100,7 +100,7 @@ private:
     bool verify_pk_format(const std::string& pk);
 
 public:
-    StorageNode(const std::string& data_directory = "./data", int port = 9000);
+    StorageNode(const std::string& data_directory = "../data", int port = 9000);
     ~StorageNode();
     
     // ========== 初始化 ==========

@@ -487,7 +487,7 @@ int main(int argc, char* argv[]) {
     std::signal(SIGTERM, signal_handler);
     
     // 默认参数
-    std::string data_dir = "./data";
+    std::string data_dir = "../data";
     int port = 9000;
     
     // 解析命令行参数

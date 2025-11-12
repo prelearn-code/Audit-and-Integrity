@@ -333,13 +333,13 @@ private:
     Json::Value keyword_states_data_;    // 存储完整的JSON数据
     
     // v4.1新增：数据目录路径常量
-    inline static const std::string DATA_DIR = "./data";
-    inline static const std::string INSERT_DIR = "./data/Insert";
-    inline static const std::string DELETE_DIR = "./data/Delete";
-    inline static const std::string ENC_FILES_DIR = "./data/EncFiles";
-    inline static const std::string META_FILES_DIR = "./data/MetaFiles";
-    inline static const std::string SEARCH_DIR = "./data/Search";
-    inline static const std::string KEYWORD_STATES_FILE = "./data/keyword_states.json";
+    inline static const std::string DATA_DIR = "../data";
+    inline static const std::string INSERT_DIR = "../data/Insert";
+    inline static const std::string DELETE_DIR = "../data/Delete";
+    inline static const std::string ENC_FILES_DIR = "../data/EncFiles";
+    inline static const std::string META_FILES_DIR = "../data/MetaFiles";
+    inline static const std::string SEARCH_DIR = "../data/Search";
+    inline static const std::string KEYWORD_STATES_FILE = "../data/keyword_states.json";
     
     // 常量定义
     inline static constexpr size_t BLOCK_SIZE = 4096;
