@@ -4,6 +4,7 @@
 #include <ctime>
 #include <chrono>
 #include <algorithm>
+#include <cstring>
 
 // ==================== 构造函数和析构函数 ====================
 
@@ -63,13 +64,10 @@ bool StorageNode::setup_cryptography(int security_param,
     element_random(mu);
     
     // 从配对参数中提取 p 和 q，计算 N = p × q
-    // 对于 type a 配对，p = q（群的阶）
     mpz_t p, q;
     mpz_init(p);
     mpz_init(q);
     
-    // 从配对参数中获取群的阶
-    // 对于 type a 配对，使用配对中定义的q值
     mpz_set_str(p, "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791", 10);
     mpz_set_str(q, "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791", 10);
     
@@ -110,10 +108,10 @@ bool StorageNode::save_public_params(const std::string& filepath) {
     Json::Value root;
     
     // 基本信息
-    root["version"] = "2.0";  // 升级版本号，表示使用新的序列化格式
+    root["version"] = "2.0";
     root["created_at"] = get_current_timestamp();
     root["description"] = "Public Parameters (N, g, μ) for Decentralized Storage System";
-    root["serialization_method"] = "element_to_bytes";  // 标注序列化方法
+    root["serialization_method"] = "element_to_bytes";
     
     // 公共参数 PP = {N, g, μ}
     Json::Value public_params;
@@ -127,17 +125,16 @@ bool StorageNode::save_public_params(const std::string& filepath) {
     int g_len = element_length_in_bytes(g);
     unsigned char* g_bytes = new unsigned char[g_len];
     element_to_bytes(g_bytes, g);
-    public_params["g"] = bytes_to_hex(g_bytes, g_len);  // 转为hex字符串存储
-    public_params["g_length"] = g_len;  // 保存字节长度，用于验证
+    public_params["g"] = bytes_to_hex(g_bytes, g_len);
+    public_params["g_length"] = g_len;
     delete[] g_bytes;
     
     // μ: G_1的生成元（使用element_to_bytes序列化）
-    // 注意：在type a配对中，G_1和G_2是同一个群，但μ是独立的生成元
     int mu_len = element_length_in_bytes(mu);
     unsigned char* mu_bytes = new unsigned char[mu_len];
     element_to_bytes(mu_bytes, mu);
-    public_params["mu"] = bytes_to_hex(mu_bytes, mu_len);  // 转为hex字符串存储
-    public_params["mu_length"] = mu_len;  // 保存字节长度，用于验证
+    public_params["mu"] = bytes_to_hex(mu_bytes, mu_len);
+    public_params["mu_length"] = mu_len;
     delete[] mu_bytes;
     
     root["public_params"] = public_params;
@@ -188,7 +185,7 @@ bool StorageNode::load_public_params(const std::string& filepath) {
     std::cout << "描述:         " << root["description"].asString() << std::endl;
     
     // 检查序列化方法（兼容旧版本）
-    std::string serialization_method = "element_to_mpz";  // 默认旧格式
+    std::string serialization_method = "element_to_mpz";
     if (root.isMember("serialization_method")) {
         serialization_method = root["serialization_method"].asString();
     }
@@ -264,7 +261,6 @@ bool StorageNode::load_public_params(const std::string& filepath) {
     
     // 加载 g - 根据序列化方法选择不同的加载方式
     if (serialization_method == "element_to_bytes") {
-        // 新格式：使用 element_from_bytes
         std::vector<unsigned char> g_bytes = hex_to_bytes(g_str);
         if (g_bytes.empty()) {
             std::cerr << "❌ g 参数hex解码失败" << std::endl;
@@ -286,7 +282,6 @@ bool StorageNode::load_public_params(const std::string& filepath) {
         }
         std::cout << "   ✅ 加载 g (bytes长度: " << g_bytes.size() << ")" << std::endl;
     } else {
-        // 旧格式：使用 element_set_mpz（兼容性支持）
         mpz_t g_mpz;
         mpz_init(g_mpz);
         if (mpz_set_str(g_mpz, g_str.c_str(), 10) != 0) {
@@ -306,7 +301,6 @@ bool StorageNode::load_public_params(const std::string& filepath) {
     
     // 加载 μ - 根据序列化方法选择不同的加载方式
     if (serialization_method == "element_to_bytes") {
-        // 新格式：使用 element_from_bytes
         std::vector<unsigned char> mu_bytes = hex_to_bytes(mu_str);
         if (mu_bytes.empty()) {
             std::cerr << "❌ μ 参数hex解码失败" << std::endl;
@@ -328,7 +322,6 @@ bool StorageNode::load_public_params(const std::string& filepath) {
         }
         std::cout << "   ✅ 加载 μ (bytes长度: " << mu_bytes.size() << ")" << std::endl;
     } else {
-        // 旧格式：使用 element_set_mpz（兼容性支持）
         mpz_t mu_mpz;
         mpz_init(mu_mpz);
         if (mpz_set_str(mu_mpz, mu_str.c_str(), 10) != 0) {
@@ -366,7 +359,6 @@ bool StorageNode::display_public_params(const std::string& filepath) {
         
         std::cout << "📄 从文件读取: " << filepath << std::endl;
         
-        // 加载JSON文件
         Json::Value root = load_json_from_file(filepath);
         
         if (!root.isMember("public_params")) {
@@ -376,20 +368,17 @@ bool StorageNode::display_public_params(const std::string& filepath) {
         
         Json::Value pp = root["public_params"];
         
-        // 检查必需字段
         if (!pp.isMember("N") || !pp.isMember("g") || !pp.isMember("mu")) {
             std::cerr << "❌ 公共参数缺少必需字段 (N, g, μ)" << std::endl;
             return false;
         }
         
-        // 显示基本信息
         std::cout << "\n📋 文件信息:" << std::endl;
         std::cout << "   版本:         " << root["version"].asString() << std::endl;
         std::cout << "   创建时间:     " << root["created_at"].asString() << std::endl;
         std::cout << "   描述:         " << root["description"].asString() << std::endl;
         
-        // 检查序列化方法
-        std::string serialization_method = "element_to_mpz";  // 默认旧格式
+        std::string serialization_method = "element_to_mpz";
         if (root.isMember("serialization_method")) {
             serialization_method = root["serialization_method"].asString();
         }
@@ -397,12 +386,10 @@ bool StorageNode::display_public_params(const std::string& filepath) {
         
         std::cout << "\n[公共参数 PP = {N, g, μ}]" << std::endl;
         
-        // N: 大整数
         std::string n_str = pp["N"].asString();
         std::cout << "   N (前50位):   " << n_str.substr(0, 50) << "..." << std::endl;
         std::cout << "   N (总位数):   " << n_str.length() << " 位十进制数" << std::endl;
         
-        // g: G_1的生成元
         std::string g_str = pp["g"].asString();
         if (serialization_method == "element_to_bytes") {
             int g_len = pp.isMember("g_length") ? pp["g_length"].asInt() : (g_str.length() / 2);
@@ -413,7 +400,6 @@ bool StorageNode::display_public_params(const std::string& filepath) {
             std::cout << "   g (总长度):   " << g_str.length() << " 位十进制数" << std::endl;
         }
         
-        // μ: G_1的生成元
         std::string mu_str = pp["mu"].asString();
         if (serialization_method == "element_to_bytes") {
             int mu_len = pp.isMember("mu_length") ? pp["mu_length"].asInt() : (mu_str.length() / 2);
@@ -441,18 +427,15 @@ bool StorageNode::display_public_params(const std::string& filepath) {
     std::cout << "📦 显示内存中的公共参数:" << std::endl;
     std::cout << "\n[公共参数 PP = {N, g, μ}]" << std::endl;
     
-    // N: 大整数
     char* n_str = mpz_get_str(NULL, 10, N);
     std::string n_full(n_str);
     free(n_str);
     std::cout << "   N (前50位):   " << n_full.substr(0, 50) << "..." << std::endl;
     std::cout << "   N (总位数):   " << n_full.length() << " 位十进制数" << std::endl;
     
-    // g: G_1的生成元
     int g_len = element_length_in_bytes(g);
     std::cout << "   g (字节长度): " << g_len << " bytes" << std::endl;
     
-    // μ: G_1的生成元
     int mu_len = element_length_in_bytes(mu);
     std::cout << "   μ (字节长度): " << mu_len << " bytes" << std::endl;
     
@@ -464,13 +447,15 @@ bool StorageNode::display_public_params(const std::string& filepath) {
     return true;
 }
 
-std::string StorageNode::computeHashH1(const std::string& input, mpz_t result) {
+// ==================== 修改后的密码学函数 ====================
+
+void StorageNode::computeHashH1(const std::string& input, mpz_t result) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256(reinterpret_cast<const unsigned char*>(input.c_str()),
            input.length(), hash);
     
     mpz_import(result, SHA256_DIGEST_LENGTH, 1, 1, 0, 0, hash);
-    mpz_mod(result, result, N_);
+    mpz_mod(result, result, N);
 }
 
 void StorageNode::computeHashH2(const std::string& input, element_t result) {
@@ -493,40 +478,37 @@ std::string StorageNode::computeHashH3(const std::string& input) {
     }
     return oss.str();
 }
-// 生成伪随机数，暂时没用
-void StorageNode::compute_prf(mpz_t result, const std::string& seed, const std::string& input) {
-    std::string combined = seed + input;
-    std::string hash_hex = computeHashH3(combined);
-    mpz_set_str(result, hash_hex.c_str(), 16);
-    mpz_mod(result, result, N);
+
+// 修改后的compute_prf函数
+void StorageNode::compute_prf(mpz_t result, const std::string& seed, const std::string& ID_F, int index) {
+    // 组合输入：seed + ID_F + index
+    std::string combined = seed + ID_F + std::to_string(index);
+    
+    // 使用computeHashH1计算哈希并直接设置到result
+    computeHashH1(combined, result);
 }
 
 std::string StorageNode::decrypt_pointer(const std::string& current_state_hash, const std::string& encrypted_pointer) {
-    // 和加密保持一致：全0表示没有前一个状态
     if (encrypted_pointer.empty() || encrypted_pointer == std::string(64, '0')) {
         return "";
     }
 
-    // 1. 将十六进制密文转换回字节
     std::vector<unsigned char> ciphertext = hexToBytes(encrypted_pointer);
     if (ciphertext.empty()) {
         return "";
     }
 
-    // 2. 创建解密上下文
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
         return "";
     }
 
-    // 3. 从 current_state_hash 中提取 32 字节 AES 密钥（与加密完全一致）
     unsigned char key[32] = {0};
     for (size_t i = 0; i < 32 && i * 2 < current_state_hash.length(); ++i) {
         std::string byte_str = current_state_hash.substr(i * 2, 2);
         key[i] = static_cast<unsigned char>(std::stoi(byte_str, nullptr, 16));
     }
 
-    // 4. 固定全 0 IV（与加密一致）
     unsigned char iv[16] = {0};
 
     if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, iv) != 1) {
@@ -534,12 +516,10 @@ std::string StorageNode::decrypt_pointer(const std::string& current_state_hash, 
         return "";
     }
 
-    // 5. 分配明文缓存：密文长度足够
     std::vector<unsigned char> plaintext(ciphertext.size() + EVP_CIPHER_block_size(EVP_aes_256_cbc()));
     int len = 0;
     int total_len = 0;
 
-    // 6. DecryptUpdate
     if (EVP_DecryptUpdate(ctx,
                           plaintext.data(), &len,
                           ciphertext.data(), static_cast<int>(ciphertext.size())) != 1) {
@@ -548,36 +528,50 @@ std::string StorageNode::decrypt_pointer(const std::string& current_state_hash, 
     }
     total_len = len;
 
-    // 7. DecryptFinal（处理 padding）
     if (EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len) != 1) {
-        // padding 错误或数据被篡改
         EVP_CIPHER_CTX_free(ctx);
         return "";
     }
     total_len += len;
 
-    // 8. 调整明文长度并转成 std::string
     plaintext.resize(total_len);
     EVP_CIPHER_CTX_free(ctx);
 
     return std::string(plaintext.begin(), plaintext.end());
 }
 
+std::string StorageNode::generate_random_seed() {
+    const int seed_length = 32;  // 32字节 = 256位
+    unsigned char seed_bytes[seed_length];
+    
+    // 使用OpenSSL生成随机数
+    RAND_bytes(seed_bytes, seed_length);
+    
+    return bytes_to_hex(seed_bytes, seed_length);
+}
+
 bool StorageNode::verify_pk_format(const std::string& pk) {
-    // 验证PK格式：应该是hex字符串，长度合理
     if (pk.empty()) {
         return false;
     }
     
-    // 检查是否为hex字符串
     for (char c : pk) {
         if (!isxdigit(c)) {
             return false;
         }
     }
     
-    // 可以添加更多验证逻辑，如长度检查
     return true;
+}
+
+std::vector<unsigned char> StorageNode::hexToBytes(const std::string& hex) {
+    std::vector<unsigned char> bytes;
+    for (size_t i = 0; i < hex.length(); i += 2) {
+        std::string byte_str = hex.substr(i, 2);
+        unsigned char byte = static_cast<unsigned char>(strtol(byte_str.c_str(), nullptr, 16));
+        bytes.push_back(byte);
+    }
+    return bytes;
 }
 
 // ==================== JSON文件操作 ====================
@@ -711,7 +705,7 @@ bool StorageNode::initialize_directories() {
 bool StorageNode::create_default_config() {
     Json::Value config;
     
-    config["version"] = "3.4";
+    config["version"] = "3.5";
     config["node"]["node_id"] = node_id;
     config["node"]["created_at"] = get_current_timestamp();
     config["node"]["description"] = "去中心化存储节点 (支持公共参数持久化)";
@@ -753,7 +747,7 @@ bool StorageNode::load_config() {
 bool StorageNode::save_config() {
     Json::Value config;
     
-    config["version"] = "3.4";
+    config["version"] = "3.5";
     config["node"]["node_id"] = node_id;
     config["node"]["last_update"] = get_current_timestamp();
     
@@ -767,7 +761,7 @@ bool StorageNode::save_config() {
     return save_json_to_file(config, config_path);
 }
 
-// ==================== 索引数据库操作 (重构) ====================
+// ==================== 索引数据库操作 ====================
 
 bool StorageNode::load_index_database() {
     std::string index_path = data_dir + "/index_db.json";
@@ -779,9 +773,7 @@ bool StorageNode::load_index_database() {
     
     Json::Value root = load_json_from_file(index_path);
     
-    // 新格式：支持 file_count, ID_Fs, database 字段
     if (root.isMember("database") && root["database"].isArray()) {
-        // 新格式
         index_database.clear();
         
         for (const auto& entry_json : root["database"]) {
@@ -791,14 +783,12 @@ bool StorageNode::load_index_database() {
             entry.state = entry_json["state"].asString();
             entry.file_path = entry_json.get("file_path", "").asString();
             
-            // 加载 TS_F
             if (entry_json.isMember("TS_F") && entry_json["TS_F"].isArray()) {
                 for (const auto& ts : entry_json["TS_F"]) {
                     entry.TS_F.push_back(ts.asString());
                 }
             }
             
-            // 加载 keywords
             if (entry_json.isMember("keywords") && entry_json["keywords"].isArray()) {
                 for (const auto& kw_json : entry_json["keywords"]) {
                     IndexKeywords kw;
@@ -809,14 +799,12 @@ bool StorageNode::load_index_database() {
                 }
             }
             
-            // 以 ID_F 为键存储
             index_database[entry.ID_F] = entry;
         }
         
         std::cout << "✅ 索引数据库加载成功 (新格式，共 " << index_database.size() << " 个文件)" << std::endl;
         
     } else if (root.isMember("indices")) {
-        // 旧格式兼容：indices 是一个对象，键是 Ti_bar
         std::cout << "⚠️  检测到旧格式数据库，正在转换..." << std::endl;
         index_database.clear();
         
@@ -828,14 +816,12 @@ bool StorageNode::load_index_database() {
                 entry.state = entry_json["state"].asString();
                 entry.file_path = entry_json.get("file_path", "").asString();
                 
-                // 加载 TS_F
                 if (entry_json.isMember("TS_F") && entry_json["TS_F"].isArray()) {
                     for (const auto& ts : entry_json["TS_F"]) {
                         entry.TS_F.push_back(ts.asString());
                     }
                 }
                 
-                // 加载 keywords
                 if (entry_json.isMember("keywords") && entry_json["keywords"].isArray()) {
                     for (const auto& kw_json : entry_json["keywords"]) {
                         IndexKeywords kw;
@@ -846,7 +832,6 @@ bool StorageNode::load_index_database() {
                     }
                 }
                 
-                // 以 ID_F 为键存储（去重）
                 if (index_database.find(entry.ID_F) == index_database.end()) {
                     index_database[entry.ID_F] = entry;
                 }
@@ -866,20 +851,17 @@ bool StorageNode::load_index_database() {
 
 bool StorageNode::save_index_database() {
     Json::Value root;
-    root["version"] = "3.4";
+    root["version"] = "3.5";
     root["last_update"] = get_current_timestamp();
     
-    // 新格式：file_count, ID_Fs, database
     root["file_count"] = static_cast<int>(index_database.size());
     
-    // 生成 ID_Fs 数组
     Json::Value id_fs_array(Json::arrayValue);
     for (const auto& pair : index_database) {
         id_fs_array.append(pair.first);
     }
     root["ID_Fs"] = id_fs_array;
     
-    // 生成 database 数组
     Json::Value database_array(Json::arrayValue);
     for (const auto& pair : index_database) {
         const IndexEntry& entry = pair.second;
@@ -890,14 +872,12 @@ bool StorageNode::save_index_database() {
         entry_json["state"] = entry.state;
         entry_json["file_path"] = entry.file_path;
         
-        // 保存 TS_F
         Json::Value ts_f_array(Json::arrayValue);
         for (const auto& ts : entry.TS_F) {
             ts_f_array.append(ts);
         }
         entry_json["TS_F"] = ts_f_array;
         
-        // 保存 keywords
         Json::Value keywords_array(Json::arrayValue);
         for (const auto& kw : entry.keywords) {
             Json::Value kw_json;
@@ -935,7 +915,7 @@ bool StorageNode::save_node_info() {
     Json::Value info;
     
     info["node_id"] = node_id;
-    info["version"] = "3.4";
+    info["version"] = "3.5";
     info["last_update"] = get_current_timestamp();
     info["statistics"]["total_files"] = static_cast<int>(index_database.size());
     info["statistics"]["total_indices"] = static_cast<int>(index_database.size());
@@ -948,29 +928,24 @@ void StorageNode::update_statistics(const std::string& operation) {
     save_node_info();
 }
 
-// ==================== 文件操作 (修改) ====================
+// ==================== 文件操作 ====================
 
 bool StorageNode::insert_file(const std::string& param_json_path, const std::string& enc_file_path) {
     std::cout << "\n📤 插入文件..." << std::endl;
+    std::cout << "   参数文件: " << param_json_path << std::endl;
+    std::cout << "   加密文件: " << enc_file_path << std::endl;
     
-    // 验证密码学系统
-    if (!crypto_initialized) {
-        std::cerr << "❌ 密码学系统未初始化" << std::endl;
+    if (!file_exists(param_json_path)) {
+        std::cerr << "❌ 参数文件不存在" << std::endl;
         return false;
     }
     
-    // 加载参数JSON
     Json::Value params = load_json_from_file(param_json_path);
-    if (params.isNull()) {
-        std::cerr << "❌ 参数文件加载失败" << std::endl;
-        return false;
-    }
     
-    // 验证必需字段（注意：ptr字段是可选的）
     if (!params.isMember("PK") || !params.isMember("ID_F") || 
         !params.isMember("TS_F") || !params.isMember("state") || 
         !params.isMember("keywords")) {
-        std::cerr << "❌ 参数文件缺少必需字段 (PK, ID_F, TS_F, state, keywords)" << std::endl;
+        std::cerr << "❌ 参数文件格式错误（缺少必需字段）" << std::endl;
         return false;
     }
     
@@ -979,36 +954,30 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     std::string state = params["state"].asString();
     
     std::cout << "   文件ID: " << ID_F << std::endl;
-    std::cout << "   客户端PK: " << PK.substr(0, 16) << "..." << std::endl;
     std::cout << "   状态: " << state << std::endl;
     
-    // 验证PK格式
     if (!verify_pk_format(PK)) {
         std::cerr << "❌ PK格式无效" << std::endl;
         return false;
     }
     
-    // 检查文件是否已存在
     if (has_file(ID_F)) {
         std::cerr << "❌ 文件ID已存在" << std::endl;
         return false;
     }
     
-    // 加载加密文件
     std::string ciphertext = read_file_content(enc_file_path);
     if (ciphertext.empty()) {
         std::cerr << "❌ 加密文件读取失败" << std::endl;
         return false;
     }
     
-    // 创建 IndexEntry（统一的数据结构）
     IndexEntry entry;
     entry.ID_F = ID_F;
     entry.PK = PK;
     entry.state = state;
     entry.file_path = files_dir + "/" + ID_F + ".enc";
     
-    // 解析 TS_F（文件认证标签）
     Json::Value ts_f_array = params["TS_F"];
     if (ts_f_array.isArray()) {
         for (const auto& tag : ts_f_array) {
@@ -1020,7 +989,6 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     
     std::cout << "   认证标签数量: " << entry.TS_F.size() << std::endl;
     
-    // 解析关键词信息
     Json::Value keywords_array = params["keywords"];
     if (!keywords_array.isArray()) {
         std::cerr << "❌ keywords 字段格式错误（应为数组）" << std::endl;
@@ -1029,44 +997,36 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     
     std::cout << "   关键词数量: " << keywords_array.size() << std::endl;
     
-    // 处理每个关键词
     for (const auto& kw : keywords_array) {
-        // 检查必需字段：Ti_bar 和 kt_wi
         if (!kw.isMember("Ti_bar") || !kw.isMember("kt_wi")) {
             std::cerr << "❌ 关键词格式错误（缺少 Ti_bar 或 kt_wi）" << std::endl;
             return false;
         }
         
-        std::string Ti_bar = kw["Ti_bar"].asString();  // 状态令牌（也是搜索令牌）
-        std::string kt_wi = kw["kt_wi"].asString();    // 关键词标签
+        std::string Ti_bar = kw["Ti_bar"].asString();
+        std::string kt_wi = kw["kt_wi"].asString();
         
-        // ptr_i 字段是可选的，如果存在则使用，否则使用 ID_F
-        std::string ptr_i = ID_F;  // 默认值
+        std::string ptr_i = ID_F;
         if (kw.isMember("ptr_i")) {
             ptr_i = kw["ptr_i"].asString();
         }
         
-        // 创建 IndexKeywords 结构
         IndexKeywords idx_kw;
-        idx_kw.ptr_i = ptr_i;      // 使用提供的指针或文件ID
-        idx_kw.kt_wi = kt_wi;      // 关键词标签
-        idx_kw.Ti_bar = Ti_bar;    // 状态令牌
+        idx_kw.ptr_i = ptr_i;
+        idx_kw.kt_wi = kt_wi;
+        idx_kw.Ti_bar = Ti_bar;
         
         entry.keywords.push_back(idx_kw);
         
         std::cout << "   ✅ 已添加关键词索引: " << Ti_bar.substr(0, 16) << "..." << std::endl;
     }
     
-    // 修改：直接使用 ID_F 作为键存储到 index_database
     index_database[ID_F] = entry;
     
-    
-    // 保存加密文件到磁盘
     if (!save_encrypted_file(ID_F, enc_file_path)) {
         std::cerr << "⚠️  加密文件保存失败" << std::endl;
     }
     
-    // 保存元数据
     Json::Value metadata;
     metadata["ID_F"] = ID_F;
     metadata["PK"] = PK;
@@ -1075,14 +1035,12 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     metadata["inserted_at"] = get_current_timestamp();
     metadata["ciphertext_size"] = (Json::UInt64)ciphertext.size();
     
-    // 保存 TS_F
     Json::Value ts_f_json(Json::arrayValue);
     for (const auto& tag : entry.TS_F) {
         ts_f_json.append(tag);
     }
     metadata["TS_F"] = ts_f_json;
     
-    // 保存 keywords
     Json::Value keywords_json(Json::arrayValue);
     for (const auto& kw : entry.keywords) {
         Json::Value kw_obj;
@@ -1096,10 +1054,8 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     std::string metadata_path = metadata_dir + "/" + ID_F + ".json";
     save_json_to_file(metadata, metadata_path);
     
-    // ========== 更新搜索数据库 ==========
     std::cout << "\n🔍 更新搜索数据库..." << std::endl;
     
-    // 为每个关键词创建一个 IndexSearchEntry
     for (const auto& kw : entry.keywords) {
         IndexSearchEntry search_entry;
         search_entry.Ti_bar = kw.Ti_bar;
@@ -1108,7 +1064,6 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
         search_entry.state = entry.state;
         search_entry.kt_wi = kw.kt_wi;
         
-        // 以 Ti_bar 为键插入到搜索数据库
         search_database[search_entry.Ti_bar] = search_entry;
         
         std::cout << "   ✅ 添加搜索索引: Ti_bar=" << kw.Ti_bar.substr(0, 16) << "..." << std::endl;
@@ -1116,10 +1071,7 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     
     std::cout << "   📊 当前搜索索引总数: " << search_database.size() << std::endl;
     
-    // 保存搜索数据库
     save_search_database();
-    
-    // 保存更新
     save_index_database();
     update_statistics("insert");
     
@@ -1128,40 +1080,483 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
 }
 
 bool StorageNode::delete_file(const std::string& PK, const std::string& file_id, const std::string& del_proof) {
-    // 函数体保持空白 - 待后续实现
     std::cout << "\n🗑️  删除文件功能待实现" << std::endl;
     std::cout << "   文件ID: " << file_id << std::endl;
     std::cout << "   请求者PK: " << PK.substr(0, 16) << "..." << std::endl;
     return false;
 }
 
-SearchResult StorageNode::search_keyword(const std::string& PK,
-                                        const std::string& search_token, 
-                                        const std::string& latest_state) {
-    SearchResult result;
+// ==================== 新增功能实现 ====================
+
+bool StorageNode::delete_file_from_json(const std::string& delete_json_path) {
+    std::cout << "\n🗑️  执行文件删除操作..." << std::endl;
     
-    // 函数体保持空白 - 待后续实现
-    std::cout << "\n🔍 搜索关键词功能待实现" << std::endl;
-    std::cout << "   请求者PK: " << PK.substr(0, 16) << "..." << std::endl;
-    std::cout << "   搜索令牌: " << search_token.substr(0, 16) << "..." << std::endl;
+    // 步骤1: 加载JSON文件
+    if (!file_exists(delete_json_path)) {
+        std::cerr << "❌ 删除参数文件不存在: " << delete_json_path << std::endl;
+        return false;
+    }
     
-    return result;
+    Json::Value delete_params = load_json_from_file(delete_json_path);
+    
+    // 步骤2: 提取参数
+    if (!delete_params.isMember("ID_F") || !delete_params.isMember("PK") || 
+        !delete_params.isMember("del")) {
+        std::cerr << "❌ JSON文件缺少必需字段" << std::endl;
+        return false;
+    }
+    
+    std::string ID_F = delete_params["ID_F"].asString();
+    std::string PK = delete_params["PK"].asString();
+    std::string del = delete_params["del"].asString();
+    
+    std::cout << "   文件ID: " << ID_F << std::endl;
+    std::cout << "   公钥: " << PK.substr(0, 16) << "..." << std::endl;
+    
+    // 步骤3: 加载数据库
+    if (!load_index_database()) {
+        std::cerr << "❌ 索引数据库加载失败" << std::endl;
+        return false;
+    }
+    
+    if (!load_search_database()) {
+        std::cerr << "❌ 搜索数据库加载失败" << std::endl;
+        return false;
+    }
+    
+    // 步骤4: 查找文件
+    auto it = index_database.find(ID_F);
+    if (it == index_database.end()) {
+        std::cerr << "❌ 文件不存在: " << ID_F << std::endl;
+        return false;
+    }
+    
+    IndexEntry& entry = it->second;
+    
+    // 步骤5: 验证公钥
+    if (entry.PK != PK) {
+        std::cerr << "❌ 公钥验证失败，无权删除此文件" << std::endl;
+        return false;
+    }
+    
+    // 步骤6: 收集所有Ti_bar并更新索引数据库
+    std::vector<std::string> Ti_bars;
+    
+    std::cout << "   更新关键词标签..." << std::endl;
+    for (auto& keyword : entry.keywords) {
+        Ti_bars.push_back(keyword.Ti_bar);
+        
+        // 更新kt_wi = kt_wi / del（大整数除法）
+        mpz_t kt_wi_mpz, del_mpz, result_mpz;
+        mpz_init(kt_wi_mpz);
+        mpz_init(del_mpz);
+        mpz_init(result_mpz);
+        
+        // 将hex字符串转换为mpz_t
+        if (mpz_set_str(kt_wi_mpz, keyword.kt_wi.c_str(), 16) != 0) {
+            std::cerr << "   ⚠️  kt_wi格式错误，跳过" << std::endl;
+            mpz_clear(kt_wi_mpz);
+            mpz_clear(del_mpz);
+            mpz_clear(result_mpz);
+            continue;
+        }
+        
+        if (mpz_set_str(del_mpz, del.c_str(), 16) != 0) {
+            std::cerr << "   ⚠️  del格式错误" << std::endl;
+            mpz_clear(kt_wi_mpz);
+            mpz_clear(del_mpz);
+            mpz_clear(result_mpz);
+            continue;
+        }
+        
+        // 检查除数是否为0
+        if (mpz_cmp_ui(del_mpz, 0) == 0) {
+            std::cerr << "   ⚠️  del为0，无法执行除法" << std::endl;
+            mpz_clear(kt_wi_mpz);
+            mpz_clear(del_mpz);
+            mpz_clear(result_mpz);
+            continue;
+        }
+        
+        // 执行除法：result = kt_wi / del
+        mpz_fdiv_q(result_mpz, kt_wi_mpz, del_mpz);
+        
+        // 转换回hex字符串
+        char* result_str = mpz_get_str(NULL, 16, result_mpz);
+        keyword.kt_wi = std::string(result_str);
+        free(result_str);
+        
+        mpz_clear(kt_wi_mpz);
+        mpz_clear(del_mpz);
+        mpz_clear(result_mpz);
+    }
+    
+    // 步骤7: 设置文件状态为invalid
+    entry.state = "invalid";
+    std::cout << "   ✅ 文件状态已设置为 invalid" << std::endl;
+    
+    // 步骤8: 更新搜索数据库
+    std::cout << "   更新搜索数据库..." << std::endl;
+    for (const std::string& Ti_bar : Ti_bars) {
+        auto search_it = search_database.find(Ti_bar);
+        if (search_it != search_database.end()) {
+            IndexSearchEntry& search_entry = search_it->second;
+            
+            // 更新状态
+            search_entry.state = "invalid";
+            
+            // 更新kt_wi = kt_wi / del
+            mpz_t kt_wi_mpz, del_mpz, result_mpz;
+            mpz_init(kt_wi_mpz);
+            mpz_init(del_mpz);
+            mpz_init(result_mpz);
+            
+            if (mpz_set_str(kt_wi_mpz, search_entry.kt_wi.c_str(), 16) == 0 &&
+                mpz_set_str(del_mpz, del.c_str(), 16) == 0 &&
+                mpz_cmp_ui(del_mpz, 0) != 0) {
+                
+                mpz_fdiv_q(result_mpz, kt_wi_mpz, del_mpz);
+                
+                char* result_str = mpz_get_str(NULL, 16, result_mpz);
+                search_entry.kt_wi = std::string(result_str);
+                free(result_str);
+            }
+            
+            mpz_clear(kt_wi_mpz);
+            mpz_clear(del_mpz);
+            mpz_clear(result_mpz);
+        }
+    }
+    
+    // 步骤9: 保存数据库
+    if (!save_index_database()) {
+        std::cerr << "❌ 索引数据库保存失败" << std::endl;
+        return false;
+    }
+    
+    if (!save_search_database()) {
+        std::cerr << "❌ 搜索数据库保存失败" << std::endl;
+        return false;
+    }
+    
+    std::cout << "✅ 文件删除成功" << std::endl;
+    std::cout << "   文件ID: " << ID_F << std::endl;
+    std::cout << "   更新的Ti_bar数量: " << Ti_bars.size() << std::endl;
+    
+    return true;
 }
 
-std::string StorageNode::generate_integrity_proof(const std::string& file_id, 
-                                                  const std::string& seed) {
-    // 函数体为空 - 根据用户要求保持不实现
-    return "";
+bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_json_path) {
+    std::cout << "\n🔍 执行关键词关联文件证明搜索..." << std::endl;
+    
+    // ========== 步骤1: 系统初始化 ==========
+    
+    // 创建SearchProof目录
+    std::string search_proof_dir = data_dir + "/SearchProof";
+    if (!create_directory(search_proof_dir)) {
+        std::cerr << "❌ 无法创建SearchProof目录" << std::endl;
+        return false;
+    }
+    
+    // 加载JSON文件
+    if (!file_exists(search_json_path)) {
+        std::cerr << "❌ 搜索参数文件不存在: " << search_json_path << std::endl;
+        return false;
+    }
+    
+    Json::Value search_params = load_json_from_file(search_json_path);
+    
+    // 验证必需字段
+    if (!search_params.isMember("PK") || !search_params.isMember("T") || 
+        !search_params.isMember("std")) {
+        std::cerr << "❌ JSON文件缺少必需字段" << std::endl;
+        return false;
+    }
+    
+    std::string PK = search_params["PK"].asString();
+    std::string T = search_params["T"].asString();
+    std::string std_input = search_params["std"].asString();
+    
+    std::cout << "   公钥: " << PK.substr(0, 16) << "..." << std::endl;
+    std::cout << "   搜索令牌: " << T << std::endl;
+    
+    // ========== 步骤2: 加载数据库 ==========
+    
+    if (!load_index_database()) {
+        std::cerr << "❌ 索引数据库加载失败" << std::endl;
+        return false;
+    }
+    
+    if (!load_search_database()) {
+        std::cerr << "❌ 搜索数据库加载失败" << std::endl;
+        return false;
+    }
+    
+    // ========== 步骤3: 初始化结果容器 ==========
+    
+    std::vector<std::string> AS;  // 涉及的所有文件ID
+    std::vector<SearchResult> PS;  // 搜索结果集合
+    
+    std::string st_alpha = std_input;  // 当前状态
+    std::string st_alpha_next;         // 下一个状态
+    
+    // ========== 步骤4: 主搜索循环 ==========
+    
+    std::cout << "   开始搜索链..." << std::endl;
+    int loop_count = 0;
+    const int MAX_LOOPS = 100;  // 防止无限循环
+    
+    while (loop_count < MAX_LOOPS) {
+        loop_count++;
+        
+        // --- 操作1: 计算Ti_bar并查找 ---
+        
+        element_t Ti_bar_elem;
+        element_init_G1(Ti_bar_elem, pairing);
+        computeHashH2(T + st_alpha, Ti_bar_elem);
+        
+        // 将element转换为hex字符串
+        int Ti_bar_len = element_length_in_bytes(Ti_bar_elem);
+        unsigned char* Ti_bar_bytes = new unsigned char[Ti_bar_len];
+        element_to_bytes(Ti_bar_bytes, Ti_bar_elem);
+        std::string Ti_bar = bytes_to_hex(Ti_bar_bytes, Ti_bar_len);
+        delete[] Ti_bar_bytes;
+        element_clear(Ti_bar_elem);
+        
+        std::cout << "   [" << loop_count << "] 查找 Ti_bar: " << Ti_bar.substr(0, 16) << "..." << std::endl;
+        
+        auto search_it = search_database.find(Ti_bar);
+        if (search_it == search_database.end()) {
+            std::cout << "   ⚠️  未找到Ti_bar，搜索结束" << std::endl;
+            break;
+        }
+        
+        IndexSearchEntry& search_entry = search_it->second;
+        std::string ID_F = search_entry.ID_F;
+        
+        std::cout << "   ✅ 找到文件: " << ID_F << std::endl;
+        
+        // 查找文件
+        auto index_it = index_database.find(ID_F);
+        if (index_it == index_database.end()) {
+            std::cerr << "❌ 文件不存在: " << ID_F << std::endl;
+            break;
+        }
+        
+        IndexEntry& file_entry = index_it->second;
+        
+        // 验证公钥
+        if (file_entry.PK != PK) {
+            std::cerr << "❌ 公钥验证失败" << std::endl;
+            return false;
+        }
+        
+        // 解密指针获取下一个状态
+        std::string st_alpha_hash = computeHashH3(st_alpha);
+        st_alpha_next = decrypt_pointer(st_alpha_hash, search_entry.ptr_i);
+        
+        // 添加ID_F到AS
+        AS.push_back(ID_F);
+        
+        // --- 操作2: 计算证明（仅当state为valid时） ---
+        
+        if (search_entry.state == "valid") {
+            std::cout << "   生成证明..." << std::endl;
+            
+            SearchResult temp_result;
+            temp_result.ID_F = ID_F;
+            
+            // 获取TS_F集合
+            const std::vector<std::string>& TS_F = file_entry.TS_F;
+            int n = TS_F.size();  // 块数量
+            
+            std::cout << "   块数量: " << n << std::endl;
+            
+            // 加载密文文件
+            std::string ciphertext;
+            if (!load_encrypted_file(ID_F, ciphertext)) {
+                std::cerr << "❌ 无法加载密文文件: " << ID_F << std::endl;
+                st_alpha = st_alpha_next;
+                continue;
+            }
+            
+            // 生成随机种子
+            std::string seed = generate_random_seed();
+            
+            // 初始化累积变量
+            mpz_t psi_alpha;
+            mpz_init_set_ui(psi_alpha, 1);
+            
+            element_t phi_element;
+            element_init_G1(phi_element, pairing);
+            element_set1(phi_element);  // 初始化为单位元
+            
+            // 遍历每个块
+            for (int i = 1; i <= n; i++) {
+                // 计算PRF值
+                mpz_t prf_temp;
+                mpz_init(prf_temp);
+                compute_prf(prf_temp, seed, ID_F, i);
+                
+                // 获取第i块的数据
+                size_t block_start = (i - 1) * BLOCK_SIZE;
+                size_t block_end = std::min(block_start + BLOCK_SIZE, ciphertext.size());
+                
+                // 遍历该块的每个扇区
+                for (size_t j = 0; j < SECTORS_PER_BLOCK && (block_start + j * SECTOR_SIZE) < block_end; j++) {
+                    size_t sector_start = block_start + j * SECTOR_SIZE;
+                    size_t sector_end = std::min(sector_start + SECTOR_SIZE, block_end);
+                    
+                    // 提取扇区数据
+                    std::vector<unsigned char> sector_data(
+                        ciphertext.begin() + sector_start,
+                        ciphertext.begin() + sector_end
+                    );
+                    
+                    // 将扇区数据转换为mpz_t
+                    mpz_t C_ij;
+                    mpz_init(C_ij);
+                    mpz_import(C_ij, sector_data.size(), 1, 1, 0, 0, sector_data.data());
+                    
+                    // 计算 prf_temp * C_ij
+                    mpz_t product;
+                    mpz_init(product);
+                    mpz_mul(product, prf_temp, C_ij);
+                    
+                    // 累积：psi_alpha *= product
+                    mpz_mul(psi_alpha, psi_alpha, product);
+                    mpz_mod(psi_alpha, psi_alpha, N);
+                    
+                    mpz_clear(C_ij);
+                    mpz_clear(product);
+                }
+                
+                // 计算 sigma_i^prf_temp
+                if (i - 1 < (int)TS_F.size()) {
+                    element_t sigma_i;
+                    element_init_G1(sigma_i, pairing);
+                    
+                    // 将TS_F[i-1]转换为element_t
+                    std::vector<unsigned char> sigma_bytes = hex_to_bytes(TS_F[i - 1]);
+                    if (!sigma_bytes.empty()) {
+                        element_from_bytes(sigma_i, sigma_bytes.data());
+                        
+                        // 计算 phi_temp = sigma_i^prf_temp
+                        element_t phi_temp;
+                        element_init_G1(phi_temp, pairing);
+                        element_pow_mpz(phi_temp, sigma_i, prf_temp);
+                        
+                        // 累积：phi_element *= phi_temp
+                        element_mul(phi_element, phi_element, phi_temp);
+                        
+                        element_clear(phi_temp);
+                    }
+                    
+                    element_clear(sigma_i);
+                }
+                
+                mpz_clear(prf_temp);
+            }
+            
+            // 转换结果为字符串
+            char* psi_str = mpz_get_str(NULL, 16, psi_alpha);
+            temp_result.psi = std::string(psi_str);
+            free(psi_str);
+            
+            // 将phi_element转换为hex字符串
+            int phi_len = element_length_in_bytes(phi_element);
+            unsigned char* phi_bytes = new unsigned char[phi_len];
+            element_to_bytes(phi_bytes, phi_element);
+            temp_result.phi = bytes_to_hex(phi_bytes, phi_len);
+            delete[] phi_bytes;
+            
+            mpz_clear(psi_alpha);
+            element_clear(phi_element);
+            
+            // 添加到PS
+            PS.push_back(temp_result);
+            
+            std::cout << "   ✅ 证明生成完成" << std::endl;
+        } else {
+            std::cout << "   ⚠️  文件状态为 invalid，跳过证明生成" << std::endl;
+        }
+        
+        // --- 操作3: 检查是否继续循环 ---
+        
+        if (st_alpha == st_alpha_next || st_alpha_next.empty()) {
+            std::cout << "   到达链表末尾" << std::endl;
+            break;
+        }
+        
+        st_alpha = st_alpha_next;
+    }
+    
+    if (loop_count >= MAX_LOOPS) {
+        std::cerr << "⚠️  达到最大循环次数，强制退出" << std::endl;
+    }
+    
+    // ========== 步骤5: 生成输出JSON ==========
+    
+    std::cout << "   生成输出文件..." << std::endl;
+    
+    Json::Value output;
+    output["T"] = T;
+    output["std"] = std_input;
+    
+    Json::Value as_array(Json::arrayValue);
+    for (const std::string& id : AS) {
+        as_array.append(id);
+    }
+    output["AS"] = as_array;
+    
+    Json::Value ps_array(Json::arrayValue);
+    for (const SearchResult& result : PS) {
+        Json::Value ps_item;
+        ps_item["ID_F"] = result.ID_F;
+        ps_item["psi_alpha"] = result.psi;
+        ps_item["phi_alpha"] = result.phi;
+        ps_array.append(ps_item);
+    }
+    output["PS"] = ps_array;
+    
+    // ========== 步骤6: 保存结果文件 ==========
+    
+    std::string output_path = search_proof_dir + "/" + T + ".json";
+    if (!save_json_to_file(output, output_path)) {
+        std::cerr << "❌ 搜索结果保存失败" << std::endl;
+        return false;
+    }
+    
+    std::cout << "✅ 搜索证明生成成功" << std::endl;
+    std::cout << "   输出文件: " << output_path << std::endl;
+    std::cout << "   涉及文件数: " << AS.size() << std::endl;
+    std::cout << "   有效证明数: " << PS.size() << std::endl;
+    
+    return true;
 }
 
-// ==================== 检索函数 (重写) ====================
+bool StorageNode::GetFileProof(const std::string& file_proof_json_path) {
+    std::cout << "⚠️  GetFileProof 功能待实现" << std::endl;
+    return false;
+}
+
+bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
+    std::cout << "⚠️  VerifySearchProof 功能待实现" << std::endl;
+    return false;
+}
+
+bool StorageNode::VerifyFileProof(const std::string& file_proof_json_path) {
+    std::cout << "⚠️  VerifyFileProof 功能待实现" << std::endl;
+    return false;
+}
+
+// ==================== 检索函数 ====================
 
 Json::Value StorageNode::retrieve_file(const std::string& file_id) {
     Json::Value result;
     
     std::cout << "\n📥 检索文件: " << file_id << std::endl;
     
-    // 在 index_database 中查找 ID_F
     auto it = index_database.find(file_id);
     if (it == index_database.end()) {
         std::cerr << "❌ 文件不存在" << std::endl;
@@ -1172,21 +1567,16 @@ Json::Value StorageNode::retrieve_file(const std::string& file_id) {
     
     const IndexEntry& entry = it->second;
     
-    // 可选：验证 PK（如果需要身份验证，可以添加 PK 参数）
-    // 这里暂时不验证，直接返回文件信息
-    
     std::cout << "   ✅ 找到文件" << std::endl;
     std::cout << "   PK: " << entry.PK.substr(0, 16) << "..." << std::endl;
     std::cout << "   状态: " << entry.state << std::endl;
     
-    // 构造返回结果
     result["success"] = true;
     result["file_id"] = entry.ID_F;
     result["PK"] = entry.PK;
     result["state"] = entry.state;
     result["file_path"] = entry.file_path;
     
-    // 读取加密文件内容
     std::string ciphertext;
     if (load_encrypted_file(file_id, ciphertext)) {
         result["ciphertext"] = ciphertext;
@@ -1195,19 +1585,16 @@ Json::Value StorageNode::retrieve_file(const std::string& file_id) {
         std::cerr << "⚠️  无法读取加密文件" << std::endl;
     }
     
-    // TS_F
     Json::Value ts_f_array(Json::arrayValue);
     for (const auto& ts : entry.TS_F) {
         ts_f_array.append(ts);
     }
     result["TS_F"] = ts_f_array;
     
-    // 提取第一个 TS_F 作为 file_auth_tag（兼容旧接口）
     if (!entry.TS_F.empty()) {
         result["file_auth_tag"] = entry.TS_F[0];
     }
     
-    // keywords
     Json::Value keywords_array(Json::arrayValue);
     for (const auto& kw : entry.keywords) {
         Json::Value kw_obj;
@@ -1218,7 +1605,6 @@ Json::Value StorageNode::retrieve_file(const std::string& file_id) {
     }
     result["keywords"] = keywords_array;
     
-    // 提取第一个 ptr_i 作为 pointer（兼容旧接口）
     if (!entry.keywords.empty()) {
         result["pointer"] = entry.keywords[0].ptr_i;
     }
@@ -1294,6 +1680,112 @@ std::vector<std::string> StorageNode::list_files_by_pk(const std::string& PK) {
     return file_list;
 }
 
+// ==================== 搜索数据库操作 ====================
+
+bool StorageNode::load_search_database() {
+    std::string search_db_path = data_dir + "/search_db.json";
+    
+    std::cout << "📥 加载搜索数据库..." << std::endl;
+    std::cout << "   文件路径: " << search_db_path << std::endl;
+    
+    if (!file_exists(search_db_path)) {
+        std::cout << "   ⚠️  搜索数据库文件不存在，创建新的空数据库" << std::endl;
+        
+        Json::Value root;
+        root["version"] = "1.0";
+        root["created_at"] = get_current_timestamp();
+        root["description"] = "Search Database for Quick Keyword Lookup";
+        root["search_index_count"] = 0;
+        root["search_database"] = Json::Value(Json::arrayValue);
+        
+        if (!save_json_to_file(root, search_db_path)) {
+            std::cerr << "   ❌ 创建搜索数据库文件失败" << std::endl;
+            return false;
+        }
+        
+        std::cout << "   ✅ 已创建新的搜索数据库文件" << std::endl;
+        return true;
+    }
+    
+    Json::Value root = load_json_from_file(search_db_path);
+    
+    if (!root.isMember("search_database")) {
+        std::cerr << "   ❌ 搜索数据库格式错误：缺少 search_database 字段" << std::endl;
+        return false;
+    }
+    
+    search_database.clear();
+    
+    const Json::Value& search_db = root["search_database"];
+    for (const auto& entry : search_db) {
+        IndexSearchEntry search_entry;
+        
+        if (entry.isMember("Ti_bar")) {
+            search_entry.Ti_bar = entry["Ti_bar"].asString();
+        }
+        if (entry.isMember("ID_F")) {
+            search_entry.ID_F = entry["ID_F"].asString();
+        }
+        if (entry.isMember("ptr_i")) {
+            search_entry.ptr_i = entry["ptr_i"].asString();
+        }
+        if (entry.isMember("state")) {
+            search_entry.state = entry["state"].asString();
+        }
+        if (entry.isMember("kt_wi")) {
+            search_entry.kt_wi = entry["kt_wi"].asString();
+        }
+        
+        if (!search_entry.Ti_bar.empty()) {
+            search_database[search_entry.Ti_bar] = search_entry;
+        }
+    }
+    
+    std::cout << "   ✅ 搜索数据库加载成功" << std::endl;
+    std::cout << "   📊 搜索索引数量: " << search_database.size() << std::endl;
+    
+    return true;
+}
+
+bool StorageNode::save_search_database() {
+    std::string search_db_path = data_dir + "/search_db.json";
+    
+    Json::Value root;
+    
+    root["version"] = "1.0";
+    root["updated_at"] = get_current_timestamp();
+    root["description"] = "Search Database for Quick Keyword Lookup";
+    root["search_index_count"] = static_cast<int>(search_database.size());
+    
+    Json::Value search_db_array(Json::arrayValue);
+    
+    for (const auto& pair : search_database) {
+        const IndexSearchEntry& entry = pair.second;
+        
+        Json::Value entry_json;
+        entry_json["Ti_bar"] = entry.Ti_bar;
+        entry_json["ID_F"] = entry.ID_F;
+        entry_json["ptr_i"] = entry.ptr_i;
+        entry_json["state"] = entry.state;
+        entry_json["kt_wi"] = entry.kt_wi;
+        
+        search_db_array.append(entry_json);
+    }
+    
+    root["search_database"] = search_db_array;
+    
+    bool success = save_json_to_file(root, search_db_path);
+    
+    if (success) {
+        std::cout << "   💾 搜索数据库已保存: " << search_db_path << std::endl;
+        std::cout << "   📊 搜索索引数量: " << search_database.size() << std::endl;
+    } else {
+        std::cerr << "   ❌ 搜索数据库保存失败" << std::endl;
+    }
+    
+    return success;
+}
+
 // ==================== 详细状态 ====================
 
 void StorageNode::print_detailed_status() {
@@ -1305,14 +1797,13 @@ void StorageNode::print_detailed_status() {
     std::cout << "   节点 ID:      " << node_id << std::endl;
     std::cout << "   数据目录:     " << data_dir << std::endl;
     std::cout << "   端口:         " << server_port << std::endl;
-    std::cout << "   版本:         v3.4 (改进的参数序列化)" << std::endl;
+    std::cout << "   版本:         v3.5 (新增删除和搜索证明功能)" << std::endl;
     
     std::cout << "\n📦 存储统计:" << std::endl;
     std::cout << "   文件总数:        " << index_database.size() << std::endl;
     std::cout << "   索引总数:        " << get_index_count() << std::endl;
     std::cout << "   搜索索引总数:    " << search_database.size() << std::endl;
     
-    // 统计各状态文件数
     int valid_count = 0;
     int invalid_count = 0;
     for (const auto& pair : index_database) {
@@ -1350,120 +1841,4 @@ void StorageNode::print_detailed_status() {
 
 bool StorageNode::has_public_params_file(const std::string& filepath) const {
     return file_exists(filepath);
-}
-
-// ==================== 搜索数据库操作 ====================
-
-bool StorageNode::load_search_database() {
-    std::string search_db_path = data_dir + "/search_db.json";
-    
-    std::cout << "📥 加载搜索数据库..." << std::endl;
-    std::cout << "   文件路径: " << search_db_path << std::endl;
-    
-    // 检查文件是否存在
-    if (!file_exists(search_db_path)) {
-        std::cout << "   ⚠️  搜索数据库文件不存在，创建新的空数据库" << std::endl;
-        
-        // 创建空的搜索数据库文件
-        Json::Value root;
-        root["version"] = "1.0";
-        root["created_at"] = get_current_timestamp();
-        root["description"] = "Search Database for Quick Keyword Lookup";
-        root["search_index_count"] = 0;
-        root["search_database"] = Json::Value(Json::arrayValue);
-        
-        if (!save_json_to_file(root, search_db_path)) {
-            std::cerr << "   ❌ 创建搜索数据库文件失败" << std::endl;
-            return false;
-        }
-        
-        std::cout << "   ✅ 已创建新的搜索数据库文件" << std::endl;
-        return true;
-    }
-    
-    // 加载现有文件
-    Json::Value root = load_json_from_file(search_db_path);
-    
-    if (!root.isMember("search_database")) {
-        std::cerr << "   ❌ 搜索数据库格式错误：缺少 search_database 字段" << std::endl;
-        return false;
-    }
-    
-    // 清空当前搜索数据库
-    search_database.clear();
-    
-    // 加载搜索索引条目
-    const Json::Value& search_db = root["search_database"];
-    for (const auto& entry : search_db) {
-        IndexSearchEntry search_entry;
-        
-        // 提取字段
-        if (entry.isMember("Ti_bar")) {
-            search_entry.Ti_bar = entry["Ti_bar"].asString();
-        }
-        if (entry.isMember("ID_F")) {
-            search_entry.ID_F = entry["ID_F"].asString();
-        }
-        if (entry.isMember("ptr_i")) {
-            search_entry.ptr_i = entry["ptr_i"].asString();
-        }
-        if (entry.isMember("state")) {
-            search_entry.state = entry["state"].asString();
-        }
-        if (entry.isMember("kt_wi")) {
-            search_entry.kt_wi = entry["kt_wi"].asString();
-        }
-        
-        // 以 Ti_bar 为键插入到映射中
-        if (!search_entry.Ti_bar.empty()) {
-            search_database[search_entry.Ti_bar] = search_entry;
-        }
-    }
-    
-    std::cout << "   ✅ 搜索数据库加载成功" << std::endl;
-    std::cout << "   📊 搜索索引数量: " << search_database.size() << std::endl;
-    
-    return true;
-}
-
-bool StorageNode::save_search_database() {
-    std::string search_db_path = data_dir + "/search_db.json";
-    
-    Json::Value root;
-    
-    // 基本信息
-    root["version"] = "1.0";
-    root["updated_at"] = get_current_timestamp();
-    root["description"] = "Search Database for Quick Keyword Lookup";
-    root["search_index_count"] = static_cast<int>(search_database.size());
-    
-    // 序列化搜索数据库
-    Json::Value search_db_array(Json::arrayValue);
-    
-    for (const auto& pair : search_database) {
-        const IndexSearchEntry& entry = pair.second;
-        
-        Json::Value entry_json;
-        entry_json["Ti_bar"] = entry.Ti_bar;
-        entry_json["ID_F"] = entry.ID_F;
-        entry_json["ptr_i"] = entry.ptr_i;
-        entry_json["state"] = entry.state;
-        entry_json["kt_wi"] = entry.kt_wi;
-        
-        search_db_array.append(entry_json);
-    }
-    
-    root["search_database"] = search_db_array;
-    
-    // 保存到文件
-    bool success = save_json_to_file(root, search_db_path);
-    
-    if (success) {
-        std::cout << "   💾 搜索数据库已保存: " << search_db_path << std::endl;
-        std::cout << "   📊 搜索索引数量: " << search_database.size() << std::endl;
-    } else {
-        std::cerr << "   ❌ 搜索数据库保存失败" << std::endl;
-    }
-    
-    return success;
 }
