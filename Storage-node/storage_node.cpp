@@ -464,38 +464,103 @@ bool StorageNode::display_public_params(const std::string& filepath) {
     return true;
 }
 
-std::string StorageNode::compute_hash_H1(const std::string& input) {
+std::string StorageNode::computeHashH1(const std::string& input, mpz_t result) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((unsigned char*)input.c_str(), input.length(), hash);
-    return bytes_to_hex(hash, SHA256_DIGEST_LENGTH);
+    SHA256(reinterpret_cast<const unsigned char*>(input.c_str()),
+           input.length(), hash);
+    
+    mpz_import(result, SHA256_DIGEST_LENGTH, 1, 1, 0, 0, hash);
+    mpz_mod(result, result, N_);
 }
 
-void StorageNode::compute_hash_H2(element_t result, const std::string& input) {
+void StorageNode::computeHashH2(const std::string& input, element_t result) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((unsigned char*)input.c_str(), input.length(), hash);
+    SHA256(reinterpret_cast<const unsigned char*>(input.c_str()),
+           input.length(), hash);
+    
     element_from_hash(result, hash, SHA256_DIGEST_LENGTH);
 }
 
-std::string StorageNode::compute_hash_H3(const std::string& input) {
+std::string StorageNode::computeHashH3(const std::string& input) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((unsigned char*)input.c_str(), input.length(), hash);
-    return bytes_to_hex(hash, 16); // 返回前16字节
+    SHA256(reinterpret_cast<const unsigned char*>(input.c_str()),
+           input.length(), hash);
+    
+    std::ostringstream oss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
+        oss << std::hex << std::setw(2) << std::setfill('0')
+            << static_cast<int>(hash[i]);
+    }
+    return oss.str();
 }
-
+// 生成伪随机数，暂时没用
 void StorageNode::compute_prf(mpz_t result, const std::string& seed, const std::string& input) {
     std::string combined = seed + input;
-    std::string hash_hex = compute_hash_H1(combined);
+    std::string hash_hex = computeHashH3(combined);
     mpz_set_str(result, hash_hex.c_str(), 16);
     mpz_mod(result, result, N);
 }
 
-std::string StorageNode::decrypt_pointer(const std::string& encrypted_pointer, const std::string& key) {
-    // 简化的解密实现
-    std::string result = encrypted_pointer;
-    for (size_t i = 0; i < result.length() && i < key.length(); ++i) {
-        result[i] ^= key[i % key.length()];
+std::string StorageNode::decrypt_pointer(const std::string& current_state_hash, const std::string& encrypted_pointer) {
+    // 和加密保持一致：全0表示没有前一个状态
+    if (encrypted_pointer.empty() || encrypted_pointer == std::string(64, '0')) {
+        return "";
     }
-    return result;
+
+    // 1. 将十六进制密文转换回字节
+    std::vector<unsigned char> ciphertext = hexToBytes(encrypted_pointer);
+    if (ciphertext.empty()) {
+        return "";
+    }
+
+    // 2. 创建解密上下文
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        return "";
+    }
+
+    // 3. 从 current_state_hash 中提取 32 字节 AES 密钥（与加密完全一致）
+    unsigned char key[32] = {0};
+    for (size_t i = 0; i < 32 && i * 2 < current_state_hash.length(); ++i) {
+        std::string byte_str = current_state_hash.substr(i * 2, 2);
+        key[i] = static_cast<unsigned char>(std::stoi(byte_str, nullptr, 16));
+    }
+
+    // 4. 固定全 0 IV（与加密一致）
+    unsigned char iv[16] = {0};
+
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, iv) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+
+    // 5. 分配明文缓存：密文长度足够
+    std::vector<unsigned char> plaintext(ciphertext.size() + EVP_CIPHER_block_size(EVP_aes_256_cbc()));
+    int len = 0;
+    int total_len = 0;
+
+    // 6. DecryptUpdate
+    if (EVP_DecryptUpdate(ctx,
+                          plaintext.data(), &len,
+                          ciphertext.data(), static_cast<int>(ciphertext.size())) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    total_len = len;
+
+    // 7. DecryptFinal（处理 padding）
+    if (EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len) != 1) {
+        // padding 错误或数据被篡改
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    total_len += len;
+
+    // 8. 调整明文长度并转成 std::string
+    plaintext.resize(total_len);
+    EVP_CIPHER_CTX_free(ctx);
+
+    return std::string(plaintext.begin(), plaintext.end());
 }
 
 bool StorageNode::verify_pk_format(const std::string& pk) {

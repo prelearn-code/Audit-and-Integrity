@@ -45,7 +45,7 @@ bool StorageClient::initializeDataDirectories() {
     std::vector<std::string> dirs = {
         DATA_DIR,
         INSERT_DIR,
-        DELETE_DIR,
+        DELES_DIR,     
         ENC_FILES_DIR,
         META_FILES_DIR,
         SEARCH_DIR
@@ -1360,3 +1360,136 @@ std::string StorageClient::getCurrentTimestamp() {
     
     return oss.str();
 }
+
+// ============================================================================
+// v4.2新增：删除令牌生成函数
+// ============================================================================
+
+bool StorageClient::deleteFile(const std::string& file_id) {
+    std::cout << "\n[删除令牌] 开始生成删除令牌..." << std::endl;
+    
+    // 1. 检查初始化状态
+    if (!initialized_) {
+        std::cerr << "[错误] 客户端未初始化" << std::endl;
+        std::cerr << "[提示] 请先调用 initialize() 函数" << std::endl;
+        return false;
+    }
+    
+    std::cout << "[删除令牌] 文件ID: " << file_id.substr(0, 32) << "..." << std::endl;
+    
+    // 2. 计算 H_2(ID_F)
+    element_t h2_result;
+    element_init_G1(h2_result, pairing_);
+    computeHashH2(file_id, h2_result);
+    std::cout << "[删除令牌] 步骤1: 计算 H_2(ID_F) 完成" << std::endl;
+    
+    // 3. 计算 del = H_2(ID_F)^{sk}
+    element_t del;
+    element_init_G1(del, pairing_);
+    element_pow_mpz(del, h2_result, sk_);
+    std::cout << "[删除令牌] 步骤2: 计算 del = H_2(ID_F)^{sk} 完成" << std::endl;
+    
+    // 4. 序列化结果
+    std::string del_serialized = serializeElement(del);
+    std::string pk_serialized = serializeElement(pk_);
+    std::cout << "[删除令牌] 步骤3: 序列化完成" << std::endl;
+    
+    // 5. 构建JSON
+    Json::Value root;
+    root["PK"] = pk_serialized;
+    root["ID_F"] = file_id;
+    root["del"] = del_serialized;
+    
+    // 6. 写入文件（直接覆盖同名文件）
+    std::string output_path = DELES_DIR + "/" + file_id + ".json";
+    std::ofstream ofs(output_path);
+    if (!ofs.is_open()) {
+        std::cerr << "[错误] 无法创建文件: " << output_path << std::endl;
+        element_clear(h2_result);
+        element_clear(del);
+        return false;
+    }
+    
+    Json::StreamWriterBuilder writer;
+    writer["indentation"] = "    ";
+    ofs << Json::writeString(writer, root);
+    ofs.close();
+    
+    std::cout << "[成功] 删除令牌已生成: " << output_path << std::endl;
+    std::cout << "\n[完成] 删除令牌文件包含:" << std::endl;
+    std::cout << "   - PK: 公钥" << std::endl;
+    std::cout << "   - ID_F: 文件ID" << std::endl;
+    std::cout << "   - del: 删除令牌" << std::endl;
+    
+    // 7. 清理临时变量
+    element_clear(h2_result);
+    element_clear(del);
+    
+    return true;
+}
+
+// ============================================================================
+// v4.2新增：搜索令牌生成函数
+// ============================================================================
+
+bool StorageClient::searchKeyword(const std::string& keyword) {
+    std::cout << "\n[搜索令牌] 开始生成搜索令牌..." << std::endl;
+    
+    // 1. 检查初始化状态
+    if (!initialized_) {
+        std::cerr << "[错误] 客户端未初始化" << std::endl;
+        std::cerr << "[提示] 请先调用 initialize() 函数" << std::endl;
+        return false;
+    }
+    
+    std::cout << "[搜索令牌] 关键词: " << keyword << std::endl;
+    
+    // 2. 生成搜索令牌
+    std::string search_token = generateSearchToken(keyword);
+    if (search_token.empty()) {
+        std::cerr << "[错误] 搜索令牌生成失败" << std::endl;
+        return false;
+    }
+    std::cout << "[搜索令牌] 步骤1: 计算 T = SE.Enc(mk, w) 完成" << std::endl;
+    
+    // 3. 查询关键词当前状态
+    std::string current_state = "";
+    if (keyword_states_.find(keyword) != keyword_states_.end()) {
+        current_state = keyword_states_[keyword];
+        std::cout << "[搜索令牌] 步骤2: 找到关键词状态" << std::endl;
+    } else {
+        std::cout << "[搜索令牌] 步骤2: 关键词 '" << keyword << "' 没有关联状态（std为空）" << std::endl;
+    }
+    
+    // 4. 序列化公钥
+    std::string pk_serialized = serializeElement(pk_);
+    std::cout << "[搜索令牌] 步骤3: 序列化公钥完成" << std::endl;
+    
+    // 5. 构建JSON
+    Json::Value root;
+    root["T"] = search_token;
+    root["std"] = current_state;
+    root["PK"] = pk_serialized;
+    
+    // 6. 写入文件（直接覆盖同名文件）
+    std::string output_path = SEARCH_DIR + "/" + keyword + ".json";
+    std::ofstream ofs(output_path);
+    if (!ofs.is_open()) {
+        std::cerr << "[错误] 无法创建文件: " << output_path << std::endl;
+        return false;
+    }
+    
+    Json::StreamWriterBuilder writer;
+    writer["indentation"] = "    ";
+    ofs << Json::writeString(writer, root);
+    ofs.close();
+    
+    std::cout << "[成功] 搜索令牌已生成: " << output_path << std::endl;
+    std::cout << "\n[完成] 搜索令牌文件包含:" << std::endl;
+    std::cout << "   - T: 搜索令牌 (" << search_token.substr(0, 16) << "...)" << std::endl;
+    std::cout << "   - std: 当前状态 " << (current_state.empty() ? "(空)" : "(" + current_state.substr(0, 16) + "...)") << std::endl;
+    std::cout << "   - PK: 公钥" << std::endl;
+    
+    return true;
+}
+

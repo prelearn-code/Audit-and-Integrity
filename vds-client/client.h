@@ -12,8 +12,15 @@
 #include <json/json.h>
 
 /**
- * @brief 本地加密存储客户端 v4.1
+ * @brief 本地加密存储客户端 v4.2
  * 实现可验证的可搜索加密与前向安全性
+ * 
+ * v4.2 主要变更（新增删除和搜索功能）：
+ * =========================================
+ * 【核心修改】
+ * - 新增 deleteFile() 函数：生成删除令牌
+ * - 新增 searchKeyword() 函数：生成搜索令牌
+ * - Deles/ 和 Search/ 目录在启动时自动创建
  * 
  * v4.1 主要变更（目录结构重构）：
  * ===================================
@@ -27,16 +34,18 @@
  * 【目录结构】
  * ./data/
  *   ├── Insert/           # insert.json 文件
- *   ├── Delete/           # 预留：删除操作文件
+ *   ├── Deles/            # 删除令牌文件
  *   ├── EncFiles/         # 加密文件 (.enc)
  *   ├── MetaFiles/        # 元数据文件
- *   ├── Search/           # 预留：搜索操作文件
+ *   ├── Search/           # 搜索令牌文件
  *   └── keyword_states.json  # 关键词状态（自动更新）
  * 
  * 【接口简化】
  * - encryptFile(file_path, keywords) - 移除手动指定输出路径
  * - initializeDataDirectories() - 新增目录初始化
  * - extractFileName() - 新增文件名提取
+ * - deleteFile(file_id) - v4.2新增：生成删除令牌
+ * - searchKeyword(keyword) - v4.2新增：生成搜索令牌
  */
 class StorageClient {
 public:
@@ -68,15 +77,15 @@ public:
     bool initialize(const std::string& public_params_file = "public_params.json");
     
     /**
-     * @brief 初始化数据目录结构（v4.1新增）
+     * @brief 初始化数据目录结构（v4.2更新）
      * @return 成功返回true
      * 
      * 创建以下目录：
      * - ./data/Insert
-     * - ./data/Delete
+     * - ./data/Deles     (v4.2新增)
      * - ./data/EncFiles
      * - ./data/MetaFiles
-     * - ./data/Search
+     * - ./data/Search    (v4.2确保创建)
      * 
      * 如果 keyword_states.json 不存在，会创建初始版本
      * 并自动加载状态文件
@@ -126,6 +135,37 @@ public:
      */
     bool decryptFile(const std::string& encrypted_file, 
                      const std::string& output_path);
+    
+    /**
+     * @brief 生成文件删除令牌（v4.2新增）
+     * @param file_id 文件ID
+     * @return 成功返回true
+     * 
+     * 算法：
+     * 1. 计算 del = H_2(ID_F)^{sk}
+     * 2. 生成JSON文件保存到 ../data/Deles/[file_id].json
+     * 3. 包含：PK（公钥）、ID_F（文件ID）、del（删除令牌）
+     * 
+     * 注意：如果同名文件存在，直接覆盖
+     */
+    bool deleteFile(const std::string& file_id);
+    
+    /**
+     * @brief 生成关键词搜索令牌（v4.2新增）
+     * @param keyword 关键词
+     * @return 成功返回true
+     * 
+     * 算法：
+     * 1. 计算搜索令牌 T = generateSearchToken(keyword)
+     * 2. 查询关键词当前状态 std (current_state)
+     * 3. 生成JSON文件保存到 ../data/Search/[keyword].json
+     * 4. 包含：T（搜索令牌）、std（最新状态）、PK（公钥）
+     * 
+     * 注意：
+     * - 如果关键词不存在状态，std设为空字符串
+     * - 同名文件存在时直接覆盖
+     */
+    bool searchKeyword(const std::string& keyword);
     
     /**
      * @brief 获取公钥
@@ -332,10 +372,10 @@ private:
     bool states_loaded_;                 // 状态文件是否已加载
     Json::Value keyword_states_data_;    // 存储完整的JSON数据
     
-    // v4.1新增：数据目录路径常量
+    // v4.2更新：数据目录路径常量（新增 DELES_DIR）
     inline static const std::string DATA_DIR = "../data";
     inline static const std::string INSERT_DIR = "../data/Insert";
-    inline static const std::string DELETE_DIR = "../data/Delete";
+    inline static const std::string DELES_DIR = "../data/Deles";          // v4.2新增
     inline static const std::string ENC_FILES_DIR = "../data/EncFiles";
     inline static const std::string META_FILES_DIR = "../data/MetaFiles";
     inline static const std::string SEARCH_DIR = "../data/Search";

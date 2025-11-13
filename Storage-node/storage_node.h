@@ -87,11 +87,11 @@ private:
     int server_port;
     
     // 密码学函数
-    std::string compute_hash_H1(const std::string& input);
-    void compute_hash_H2(element_t result, const std::string& input);
-    std::string compute_hash_H3(const std::string& input);
+    std::string computeHashH1(const std::string& input);
+    void computeHashH2(element_t result, const std::string& input);
+    std::string computeHashH3(const std::string& input);
     void compute_prf(mpz_t result, const std::string& seed, const std::string& input);
-    std::string decrypt_pointer(const std::string& encrypted_pointer, const std::string& key);
+    std::string decrypt_pointer(const std::string& current_state_hash, const std::string& encrypted_pointer);
     
     // JSON文件操作
     Json::Value load_json_from_file(const std::string& filepath);

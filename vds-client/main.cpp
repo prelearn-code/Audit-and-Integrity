@@ -3,10 +3,11 @@
 #include <vector>
 #include <sstream>
 #include <fstream>
+#include <limits>
 
 void printUsage() {
     std::cout << "\n=========================================" << std::endl;
-    std::cout << "  本地加密存储工具 v4.1" << std::endl;
+    std::cout << "  本地加密存储工具 v4.2" << std::endl;
     std::cout << "=========================================" << std::endl;
     std::cout << "\n🔧 系统设置:" << std::endl;
     std::cout << "  1.  init           - 初始化系统（从 public_params.json 加载参数）" << std::endl;
@@ -16,6 +17,9 @@ void printUsage() {
     std::cout << "\n📁 文件操作:" << std::endl;
     std::cout << "  5.  encrypt        - 加密文件（自动管理所有输出文件）" << std::endl;
     std::cout << "  6.  decrypt        - 解密文件" << std::endl;
+    std::cout << "  7.  delete         - 生成删除令牌" << std::endl;
+    std::cout << "\n🔍 搜索操作:" << std::endl;
+    std::cout << "  8.  search         - 生成搜索令牌" << std::endl;
     std::cout << "\n📊 状态查询:" << std::endl;
     std::cout << "  10. query-state    - 查询关键词当前状态" << std::endl;
     std::cout << "\n📖 其他:" << std::endl;
@@ -26,14 +30,16 @@ void printUsage() {
 
 void printBanner() {
     std::cout << "==================================================" << std::endl;
-    std::cout << "  🔐 本地加密存储工具 - v4.1" << std::endl;
-    std::cout << "  可验证的可搜索加密系统（目录结构重构版）" << std::endl;
-    std::cout << "  ⭐ v4.1 新特性:" << std::endl;
+    std::cout << "  🔐 本地加密存储工具 - v4.2" << std::endl;
+    std::cout << "  可验证的可搜索加密系统" << std::endl;
+    std::cout << "  ⭐ v4.2 新特性:" << std::endl;
+    std::cout << "     - 新增删除令牌生成功能（delete）" << std::endl;
+    std::cout << "     - 新增搜索令牌生成功能（search）" << std::endl;
+    std::cout << "     - Deles/ 和 Search/ 目录自动创建" << std::endl;
+    std::cout << "  ⭐ v4.1 特性:" << std::endl;
     std::cout << "     - 统一数据目录管理（./data）" << std::endl;
-    std::cout << "     - 自动创建目录结构" << std::endl;
     std::cout << "     - 使用原始文件名" << std::endl;
     std::cout << "     - 自动更新 keyword_states.json" << std::endl;
-    std::cout << "     - 文件冲突时自动添加时间戳" << std::endl;
     std::cout << "==================================================" << std::endl;
 }
 
@@ -76,10 +82,10 @@ void printDataDirectoryStructure() {
     std::cout << "\n📂 数据目录结构:" << std::endl;
     std::cout << "./data/" << std::endl;
     std::cout << "├── Insert/           # insert.json 文件（供 Storage Node）" << std::endl;
+    std::cout << "├── Deles/            # 删除令牌文件 (v4.2新增)" << std::endl;
     std::cout << "├── EncFiles/         # 加密文件 (.enc)" << std::endl;
     std::cout << "├── MetaFiles/        # 元数据文件" << std::endl;
-    std::cout << "├── Search/           # 预留：搜索操作文件" << std::endl;
-    std::cout << "├── Delete/           # 预留：删除操作文件" << std::endl;
+    std::cout << "├── Search/           # 搜索令牌文件" << std::endl;
     std::cout << "└── keyword_states.json  # 关键词状态（自动维护）\n" << std::endl;
 }
 
@@ -108,8 +114,19 @@ int main() {
     
     std::string command;
     bool running = true;
+    bool first_run = true;  // 标记是否第一次运行
     
     while (running) {
+        // 非首次运行时，等待用户按任意键后再显示菜单
+        if (!first_run) {
+            std::cout << "\n按 Enter 键继续...";
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cin.get();
+            std::cout << "\n" << std::string(50, '=') << std::endl;
+            printUsage();
+        }
+        first_run = false;  // 第一次循环后设为false
+        
         std::cout << "\n💻 > ";
         std::cin >> command;
         
@@ -247,6 +264,46 @@ int main() {
                     std::cerr << "❌ 文件解密失败" << std::endl;
                 }
             }
+            else if (command == "delete" || command == "7") {
+                std::string file_id;
+                std::cout << "\n🗑️  输入文件ID (ID_F): ";
+                std::cin >> file_id;
+                
+                std::cout << "\n💡 提示: 删除令牌用于授权 Storage Node 删除指定文件" << std::endl;
+                std::cout << "   令牌将保存到 ../data/Deles/ 目录\n" << std::endl;
+                
+                if (client.deleteFile(file_id)) {
+                    std::cout << "\n✅ 删除令牌生成成功！" << std::endl;
+                    std::cout << "📌 生成的文件:" << std::endl;
+                    std::cout << "   - ../data/Deles/" << file_id << ".json" << std::endl;
+                    std::cout << "\n💡 下一步: 将此文件发送给 Storage Node 执行删除操作" << std::endl;
+                } else {
+                    std::cerr << "\n❌ 删除令牌生成失败！" << std::endl;
+                    std::cerr << "💡 可能的原因:" << std::endl;
+                    std::cerr << "   1. 系统尚未初始化（请先运行 'init'）" << std::endl;
+                    std::cerr << "   2. 文件ID格式错误" << std::endl;
+                }
+            }
+            else if (command == "search" || command == "8") {
+                std::string keyword;
+                std::cout << "\n🔍 输入关键词 (w): ";
+                std::cin >> keyword;
+                
+                std::cout << "\n💡 提示: 搜索令牌用于在 Storage Node 上搜索包含该关键词的文件" << std::endl;
+                std::cout << "   令牌将保存到 ../data/Search/ 目录\n" << std::endl;
+                
+                if (client.searchKeyword(keyword)) {
+                    std::cout << "\n✅ 搜索令牌生成成功！" << std::endl;
+                    std::cout << "📌 生成的文件:" << std::endl;
+                    std::cout << "   - ../data/Search/" << keyword << ".json" << std::endl;
+                    std::cout << "\n💡 下一步: 将此文件发送给 Storage Node 执行搜索操作" << std::endl;
+                } else {
+                    std::cerr << "\n❌ 搜索令牌生成失败！" << std::endl;
+                    std::cerr << "💡 可能的原因:" << std::endl;
+                    std::cerr << "   1. 系统尚未初始化（请先运行 'init'）" << std::endl;
+                    std::cerr << "   2. 关键词格式错误" << std::endl;
+                }
+            }
             // ========== v4.1修改：移除状态文件手动管理命令 ==========
             // 状态文件现在自动管理，用户无需手动加载或保存
             
@@ -263,14 +320,14 @@ int main() {
                 printDataDirectoryStructure();
             }
             else if (command == "quit" || command == "exit" || command == "12") {
-                std::cout << "\n👋 感谢使用本地加密存储工具 v4.1！" << std::endl;
+                std::cout << "\n👋 感谢使用本地加密存储工具 v4.2！" << std::endl;
                 std::cout << "   所有数据已保存在 ./data 目录中。" << std::endl;
                 std::cout << "   记得保护好您的密钥文件！\n" << std::endl;
                 running = false;
             }
             else {
                 std::cerr << "❌ 未知命令: " << command << std::endl;
-                std::cerr << "   输入 'help' 查看帮助。" << std::endl;
+                std::cerr << "   输入 'help' 或 '11' 查看完整命令列表。" << std::endl;
             }
             
         } catch (const std::exception& e) {
