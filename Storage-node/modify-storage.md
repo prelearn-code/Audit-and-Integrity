@@ -120,4 +120,33 @@ struct FileProof
     - 计算：right = (zeta_1*zeta_2*Ti_bar_temp*(mu)^(pho),PK),其中mu是公共参数，pho为上面计算的值。
     - 验证过程：需要设计一个双线性匹配函数IsPairingEquation(left,right)
 ## 增加一个VerifyFileProof函数
-- 输入：
+- 函数描述：验证单个文件的证明的正确性
+- 输入：JSON文件
+    - 文件格式
+    ```JSON
+    {
+        "ID_F":"文件ID",
+        "FileProof":
+        {
+            "psi":"结构体FileProof的psi的数值",
+            "phi":"结构体FileProof的phi的数值"
+        },
+        "seed":"随机数的数值"
+    }
+    ```
+- 输出1/0，表示验证的成功与失败
+- 函数计算过程：
+    - 通过输入文件获取ID_F，psi,phi,seed
+    - 加载索引数据库，索引ID_F数据，获取TS_F的元素个数n,公钥PK
+    - 设置变量zeta=1
+    - 循环i从1-n
+        - 设置变量mpz_t ptr_temp;element_t h2_temp;
+        - 计算compute_prf(ptr_temp,seed,ID_F,i)
+        - 计算computeHashH2(ID_F+i,h2_temp)
+        - 计算zeta*=h2_temp^{ptr_temp}
+    - 循环结束得到zeta;
+    - 设置element_t left,right;
+    - 计算left = (phi,g) g为公共参数
+    - 计算right=(zeta*mu^{psi},PK)
+    - 通过设计的双线性映射函数IsPairingEquation(left,right)判断结果
+    - 返回IsPairingEquation(left,right)的结果。

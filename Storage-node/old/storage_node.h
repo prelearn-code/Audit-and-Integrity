@@ -50,14 +50,8 @@ struct SearchResult {
     std::string phi;       // φ值（累积签名）
 };
 
-// 文件证明结构体
-struct FileProof {
-    std::string psi;   // ψ值（累积证明）
-    std::string phi;   // φ值（累积签名）
-};
-
 /**
- * StorageNode - 去中心化存储节点 (本地版 v3.6)
+ * StorageNode - 去中心化存储节点 (本地版 v3.5)
  * 
  * 特性:
  * - ✅ 完全本地化存储
@@ -66,12 +60,11 @@ struct FileProof {
  * - ✅ 无区块链依赖
  * - ✅ 客户端公钥身份验证
  * - ✅ 文件状态管理
- * - ✅ 简化的公共参数 N,g,μ
+ * - ✅ 简化公共参数 N,g,μ
  * - ✅ 灵活的密码学初始化
  * - ✅ 改进的参数序列化 element_to_bytes
  * - ✅ 文件分块处理和证明生成
  * - ✅ 新增删除和搜索证明功能
- * - ✅ 新增文件证明生成和验证功能
  */
 class StorageNode {
 private:
@@ -180,23 +173,17 @@ public:
     bool SearchKeywordsAssociatedFilesProof(const std::string& search_json_path);
     
     /**
-     * GetFileProof() - 获取文件证明
-     * @param ID_F 文件ID
-     * @return 成功返回true，失败返回false
+     * GetFileProof() - 获取文件证明（待实现）
      */
-    bool GetFileProof(const std::string& ID_F);
+    bool GetFileProof(const std::string& file_proof_json_path);
     
     /**
-     * VerifySearchProof() - 验证搜索证明
-     * @param search_proof_json_path 搜索证明JSON文件路径
-     * @return 验证成功返回true，失败返回false
+     * VerifySearchProof() - 验证搜索证明（待实现）
      */
     bool VerifySearchProof(const std::string& search_proof_json_path);
     
     /**
-     * VerifyFileProof() - 验证文件证明
-     * @param file_proof_json_path 文件证明JSON文件路径
-     * @return 验证成功返回true，失败返回false
+     * VerifyFileProof() - 验证文件证明（待实现）
      */
     bool VerifyFileProof(const std::string& file_proof_json_path);
     
@@ -260,7 +247,7 @@ public:
         std::cout << "端口:         " << server_port << std::endl;
         std::cout << "文件数:       " << get_index_count() << std::endl;
         std::cout << "密码学:       " << (crypto_initialized ? "已初始化" : "未初始化") << std::endl;
-        std::cout << "版本:         v3.6 (新增文件证明生成和验证)" << std::endl;
+        std::cout << "版本:         v3.5 (新增删除和搜索证明功能)" << std::endl;
         std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     }
     

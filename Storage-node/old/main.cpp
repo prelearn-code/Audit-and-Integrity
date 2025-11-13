@@ -28,12 +28,11 @@ void signal_handler(int signal) {
 
 void print_banner() {
     std::cout << "\n╔══════════════════════════════════════════════════════════╗" << std::endl;
-    std::cout << "║      📦 去中心化存储节点控制台 v3.6                      ║" << std::endl;
+    std::cout << "║      📦 去中心化存储节点控制台 v3.5                      ║" << std::endl;
     std::cout << "╠══════════════════════════════════════════════════════════╣" << std::endl;
-    std::cout << "║  ✨ 新增: 文件证明生成功能 (GetFileProof)               ║" << std::endl;
-    std::cout << "║  ✨ 新增: 搜索证明验证功能 (VerifySearchProof)          ║" << std::endl;
-    std::cout << "║  ✨ 新增: 文件证明验证功能 (VerifyFileProof)            ║" << std::endl;
-    std::cout << "║  ✨ 改进: 搜索证明生成增强 (seed和phi支持)              ║" << std::endl;
+    std::cout << "║  ✨ 新增: 文件删除功能 (delete_file_from_json)          ║" << std::endl;
+    std::cout << "║  ✨ 新增: 搜索关键词关联文件证明                         ║" << std::endl;
+    std::cout << "║  ✨ 改进: 哈希函数支持文件分块处理                       ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
 }
 
@@ -58,9 +57,9 @@ void print_menu() {
     std::cout << "║     8  搜索关键词关联文件证明 (完整搜索)                 ║" << std::endl;
     std::cout << "║                                                          ║" << std::endl;
     std::cout << "║  🔐 证明与验证                                            ║" << std::endl;
-    std::cout << "║     9  获取文件证明 (输入文件ID)                        ║" << std::endl;
-    std::cout << "║     10 验证搜索证明 (输入JSON文件)                      ║" << std::endl;
-    std::cout << "║     11 验证文件证明 (输入JSON文件)                      ║" << std::endl;
+    std::cout << "║     9  获取文件证明 (待实现)                            ║" << std::endl;
+    std::cout << "║     10 验证搜索证明 (待实现)                            ║" << std::endl;
+    std::cout << "║     11 验证文件证明 (待实现)                            ║" << std::endl;
     std::cout << "║                                                          ║" << std::endl;
     std::cout << "║  📊 查询与管理                                            ║" << std::endl;
     std::cout << "║     12 查看节点状态                                     ║" << std::endl;
@@ -405,38 +404,26 @@ void handle_search_keywords_proof(StorageNode* node) {
 void handle_get_file_proof(StorageNode* node) {
     print_section_header("获取文件证明", "📄");
     
-    std::string file_id;
+    std::string json_path;
     
-    std::cout << "\n💡 功能说明:" << std::endl;
-    std::cout << "   ├─ 生成单个文件的证明" << std::endl;
-    std::cout << "   ├─ 计算文件的psi和phi值" << std::endl;
-    std::cout << "   └─ 保存到 ../data/FileProofs/[ID_F].json" << std::endl;
+    std::cout << "\n💡 JSON文件格式说明:" << std::endl;
+    std::cout << "   ├─ file_id: 文件标识" << std::endl;
+    std::cout << "   └─ proof_type: 证明类型" << std::endl;
     
-    std::cout << "\n📂 请输入文件ID: ";
+    std::cout << "\n📂 请输入文件证明参数JSON文件路径: ";
     clear_input_buffer();
-    std::getline(std::cin, file_id);
+    std::getline(std::cin, json_path);
     
-    if (file_id.empty()) {
-        std::cout << "\n❌ 文件ID不能为空" << std::endl;
-        wait_for_enter();
-        return;
-    }
+    std::cout << "\n⏳ 正在获取文件证明..." << std::endl;
     
-    std::cout << "\n⏳ 正在生成文件证明..." << std::endl;
-    
-    if (node->GetFileProof(file_id)) {
-        std::cout << "\n✅ 文件证明生成成功!" << std::endl;
-        std::cout << "\n📊 证明信息:" << std::endl;
-        std::cout << "   ├─ 文件ID: " << file_id << std::endl;
-        std::cout << "   ├─ 证明文件已保存" << std::endl;
-        std::cout << "   └─ 包含psi、phi和seed值" << std::endl;
+    if (node->GetFileProof(json_path)) {
+        std::cout << "\n✅ 文件证明获取成功!" << std::endl;
     } else {
-        std::cout << "\n❌ 文件证明生成失败!" << std::endl;
-        std::cout << "\n🔍 可能的原因:" << std::endl;
-        std::cout << "   ├─ 文件不存在" << std::endl;
-        std::cout << "   ├─ 密文文件无法加载" << std::endl;
-        std::cout << "   ├─ 索引数据库加载失败" << std::endl;
-        std::cout << "   └─ 密码学系统未初始化" << std::endl;
+        std::cout << "\n⚠️  此功能正在开发中..." << std::endl;
+        std::cout << "\n💡 即将支持:" << std::endl;
+        std::cout << "   ├─ 获取单个文件的存在性证明" << std::endl;
+        std::cout << "   ├─ 生成文件所有权证明" << std::endl;
+        std::cout << "   └─ 导出文件证明数据" << std::endl;
     }
     
     wait_for_enter();
@@ -448,39 +435,24 @@ void handle_verify_search_proof(StorageNode* node) {
     std::string json_path;
     
     std::cout << "\n💡 JSON文件格式说明:" << std::endl;
-    std::cout << "   ├─ AS: 关联的文件ID数组" << std::endl;
-    std::cout << "   ├─ PS: 证明集合（包含psi_alpha和phi_alpha）" << std::endl;
-    std::cout << "   ├─ T: 搜索令牌" << std::endl;
-    std::cout << "   ├─ std: 状态" << std::endl;
-    std::cout << "   ├─ seed: 随机种子" << std::endl;
-    std::cout << "   └─ phi: 全局phi值" << std::endl;
+    std::cout << "   ├─ proof: 搜索证明数据" << std::endl;
+    std::cout << "   ├─ search_token: 搜索令牌" << std::endl;
+    std::cout << "   └─ result: 搜索结果" << std::endl;
     
     std::cout << "\n📂 请输入搜索证明JSON文件路径: ";
     clear_input_buffer();
     std::getline(std::cin, json_path);
     
-    if (json_path.empty()) {
-        std::cout << "\n❌ 文件路径不能为空" << std::endl;
-        wait_for_enter();
-        return;
-    }
-    
     std::cout << "\n⏳ 正在验证搜索证明..." << std::endl;
     
     if (node->VerifySearchProof(json_path)) {
         std::cout << "\n✅ 搜索证明验证成功!" << std::endl;
-        std::cout << "\n📊 验证结果:" << std::endl;
-        std::cout << "   ├─ 配对等式验证通过" << std::endl;
-        std::cout << "   ├─ 所有文件证明有效" << std::endl;
-        std::cout << "   └─ 搜索结果可信" << std::endl;
     } else {
-        std::cout << "\n❌ 搜索证明验证失败!" << std::endl;
-        std::cout << "\n🔍 可能的原因:" << std::endl;
-        std::cout << "   ├─ 证明文件格式错误" << std::endl;
-        std::cout << "   ├─ 文件不存在于索引数据库" << std::endl;
-        std::cout << "   ├─ 配对等式不成立" << std::endl;
-        std::cout << "   ├─ seed或phi值被篡改" << std::endl;
-        std::cout << "   └─ 密码学系统未初始化" << std::endl;
+        std::cout << "\n⚠️  此功能正在开发中..." << std::endl;
+        std::cout << "\n💡 即将支持:" << std::endl;
+        std::cout << "   ├─ 验证搜索结果的正确性" << std::endl;
+        std::cout << "   ├─ 检查关键词关联的完整性" << std::endl;
+        std::cout << "   └─ 确认搜索证明的有效性" << std::endl;
     }
     
     wait_for_enter();
@@ -492,36 +464,24 @@ void handle_verify_file_proof(StorageNode* node) {
     std::string json_path;
     
     std::cout << "\n💡 JSON文件格式说明:" << std::endl;
-    std::cout << "   ├─ ID_F: 文件标识" << std::endl;
-    std::cout << "   ├─ FileProof: 证明数据（包含psi和phi）" << std::endl;
-    std::cout << "   └─ seed: 随机种子" << std::endl;
+    std::cout << "   ├─ proof: 文件证明数据" << std::endl;
+    std::cout << "   ├─ file_id: 文件标识" << std::endl;
+    std::cout << "   └─ metadata: 文件元数据" << std::endl;
     
     std::cout << "\n📂 请输入文件证明JSON文件路径: ";
     clear_input_buffer();
     std::getline(std::cin, json_path);
     
-    if (json_path.empty()) {
-        std::cout << "\n❌ 文件路径不能为空" << std::endl;
-        wait_for_enter();
-        return;
-    }
-    
     std::cout << "\n⏳ 正在验证文件证明..." << std::endl;
     
     if (node->VerifyFileProof(json_path)) {
         std::cout << "\n✅ 文件证明验证成功!" << std::endl;
-        std::cout << "\n📊 验证结果:" << std::endl;
-        std::cout << "   ├─ 配对等式验证通过" << std::endl;
-        std::cout << "   ├─ 文件完整性有效" << std::endl;
-        std::cout << "   └─ 证明可信" << std::endl;
     } else {
-        std::cout << "\n❌ 文件证明验证失败!" << std::endl;
-        std::cout << "\n🔍 可能的原因:" << std::endl;
-        std::cout << "   ├─ 证明文件格式错误" << std::endl;
-        std::cout << "   ├─ 文件不存在于索引数据库" << std::endl;
-        std::cout << "   ├─ 配对等式不成立" << std::endl;
-        std::cout << "   ├─ psi、phi或seed值被篡改" << std::endl;
-        std::cout << "   └─ 密码学系统未初始化" << std::endl;
+        std::cout << "\n⚠️  此功能正在开发中..." << std::endl;
+        std::cout << "\n💡 即将支持:" << std::endl;
+        std::cout << "   ├─ 验证文件存在性证明" << std::endl;
+        std::cout << "   ├─ 检查文件完整性证明" << std::endl;
+        std::cout << "   └─ 确认文件所有权证明" << std::endl;
     }
     
     wait_for_enter();
