@@ -1,0 +1,49 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "cppbuild",
+      "label": "C/C++: g++ build active file",
+      "command": "/usr/bin/g++",
+      "args": [
+        "-fdiagnostics-color=always",
+        "-std=c++17",
+        "-g",
+
+        // 源文件
+        "${file}",
+        "/home/zsw/codes/Audit-and-Integrity/Storage-node/storage_node.cpp",
+
+        // 头文件目录
+        "-I", "/home/zsw/codes/Audit-and-Integrity/Storage-node",
+        "-I", "/usr/local/include",
+        "-I", "/usr/include/jsoncpp",
+
+        // 输出可执行文件
+        "-o",
+        "${fileDirname}/${fileBasenameNoExtension}",
+
+        // 库目录
+        "-L", "/usr/local/lib",
+
+        // 链接的库（顺序要在最后）
+        "-lpbc",
+        "-lgmp",
+        "-ljsoncpp",
+        "-lcrypto",
+        "-lssl"
+      ],
+      "options": {
+        "cwd": "${fileDirname}"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "detail": "Task with GMP, PBC, OpenSSL, JSONCPP"
+    }
+  ]
+}

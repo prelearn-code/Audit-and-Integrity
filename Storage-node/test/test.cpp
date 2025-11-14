@@ -14,6 +14,7 @@
 // 辅助函数：十六进制字符串转字节数组
 std::vector<unsigned char> hexToBytes(const std::string& hex) {
     std::vector<unsigned char> bytes;
+    std::cout<<hex.length()<<std::endl;
     for (size_t i = 0; i < hex.length(); i += 2) {
         std::string byteString = hex.substr(i, 2);
         unsigned char byte = (unsigned char)strtol(byteString.c_str(), nullptr, 16);
@@ -22,62 +23,43 @@ std::vector<unsigned char> hexToBytes(const std::string& hex) {
     return bytes;
 }
 
-// 辅助函数：字节数组转十六进制字符串
-std::string bytesToHex(const unsigned char* data, size_t len) {
-    std::string hex;
-    char buf[3];
-    for (size_t i = 0; i < len; i++) {
-        sprintf(buf, "%02x", data[i]);
-        hex += buf;
-    }
-    return hex;
-}
-
 // 辅助函数：从十六进制字符串反序列化element
-bool deserializeElement(const std::string& hex_str, element_t elem) {
-    if (hex_str.empty()) {
-        std::cerr << "❌ 空的十六进制字符串" << std::endl;
+bool deserializeElement(const std::string& hex_str, element_t elem){
+    // 错误检查1：hex字符串长度必须是偶数
+    if (hex_str.length() % 2 != 0) {
+        std::cerr << "⚠️  deserializeElement: hex字符串长度必须是偶数，当前长度: " 
+                  << hex_str.length() << std::endl;
         return false;
     }
     
+    // 错误检查2：hex字符串不能为空
+    if (hex_str.empty()) {
+        std::cerr << "⚠️  deserializeElement: hex字符串为空" << std::endl;
+        return false;
+    }
+    
+    // 步骤1：将hex转换为bytes
     std::vector<unsigned char> bytes = hexToBytes(hex_str);
     if (bytes.empty()) {
-        std::cerr << "❌ 十六进制转换失败" << std::endl;
+        std::cerr << "⚠️  deserializeElement: hex转换为bytes失败" << std::endl;
         return false;
     }
     
-    int result = element_from_bytes(elem, bytes.data());
-    if (result != 0) {
-        std::cerr << "❌ element_from_bytes 失败" << std::endl;
+    // 步骤2：从bytes反序列化为element
+    int bytes_read = element_from_bytes(elem, bytes.data());
+    if (bytes_read <= 0) {
+        std::cerr << "⚠️  deserializeElement: element_from_bytes失败，返回值: " 
+                  << bytes_read << std::endl;
         return false;
     }
     
-    return true;
-}
-
-// 辅助函数：element序列化为十六进制字符串
-std::string serializeElement(element_t elem) {
-    int len = element_length_in_bytes(elem);
-    unsigned char* buf = new unsigned char[len];
-    element_to_bytes(buf, elem);
-    std::string hex = bytesToHex(buf, len);
-    delete[] buf;
-    return hex;
-}
-
-// 辅助函数：从十六进制字符串反序列化mpz_t
-bool deserializeMpz(const std::string& hex_str, mpz_t result) {
-    if (hex_str.empty()) {
-        std::cerr << "❌ 空的十六进制字符串" << std::endl;
-        return false;
+    // 错误检查3：验证元素不是单位元（无效元素）
+    if (element_is1(elem)) {
+        std::cerr << "⚠️  deserializeElement: 反序列化后的元素是单位元（无效）" << std::endl;
+        printf("element_is1 returned 1\n");
     }
     
-    int ret = mpz_set_str(result, hex_str.c_str(), 16);
-    if (ret != 0) {
-        std::cerr << "❌ mpz_set_str 失败" << std::endl;
-        return false;
-    }
-    
+    // 所有检查通过
     return true;
 }
 
@@ -107,8 +89,8 @@ bool verifyFileProof(
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     
     // 初始化 element
-    element_t psi, phi, g, mu;
-    element_init_G1(psi, pairing);
+    element_t  phi, g, mu;
+    mpz_t psi;
     element_init_G1(phi, pairing);
     element_init_G1(g, pairing);
     element_init_G1(mu, pairing);
@@ -116,15 +98,11 @@ bool verifyFileProof(
     // 反序列化参数
     std::cout << "📥 步骤 1: 反序列化证明数据..." << std::endl;
     
-    if (!deserializeElement(psi_hex, psi)) {
-        std::cerr << "❌ psi 反序列化失败" << std::endl;
-        element_clear(psi); element_clear(phi); 
-        element_clear(g); element_clear(mu);
-        return false;
-    }
+    mpz_init(psi);
+    mpz_set_str(psi, psi_hex.c_str(), 16);
     std::cout << "✅ psi 反序列化成功 (长度: " << psi_hex.length() << ")" << std::endl;
     
-    if (!deserializeElement(phi_hex, phi)) {
+    if (!deserializeElement(phi_hex, phi)) {           
         std::cerr << "❌ phi 反序列化失败" << std::endl;
         element_clear(psi); element_clear(phi); 
         element_clear(g); element_clear(mu);
@@ -287,7 +265,7 @@ int main() {
     
     std::cout << "\n📋 认证标签:" << std::endl;
     std::cout << "标签数量: " << TS_F_hex.size() << std::endl;
-    for (size_t i = 0; i < TS_F_hex.size(); i++) {
+    for (size_t i = 0; i < TS_F_hex.size(); ++i) {
         std::cout << "  TS_F[" << i << "] = " 
                   << TS_F_hex[i].substr(0, 30) << "..." << std::endl;
     }
