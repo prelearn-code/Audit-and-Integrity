@@ -101,19 +101,8 @@ private:
     std::string metadata_dir;
     int server_port;
     
-    // 密码学函数（修改为void返回值）
-    void computeHashH1(const std::string& input, mpz_t result);
-    void computeHashH2(const std::string& input, element_t result);
-    std::string computeHashH3(const std::string& input);
-    void compute_prf(mpz_t result, const std::string& seed, const std::string& ID_F, int index);
-    std::string decrypt_pointer(const std::string& current_state_hash, const std::string& encrypted_pointer);
-    
     // 辅助函数
     std::string generate_random_seed();
-    
-    // 序列化辅助函数（与client.cpp统一，方案A核心修改）
-    std::string serializeElement(element_t elem);
-    bool deserializeElement(const std::string& hex_str, element_t elem);
     
     // JSON文件操作
     Json::Value load_json_from_file(const std::string& filepath);
@@ -125,10 +114,6 @@ private:
     bool file_exists(const std::string& filepath) const;
     bool create_directory(const std::string& dirpath);
     std::string get_current_timestamp();
-    
-    // 辅助函数（统一驼峰命名）
-    std::string bytesToHex(const unsigned char* data, size_t len);
-    std::vector<unsigned char> hexToBytes(const std::string& hex);
     
     // 身份验证
     bool verify_pk_format(const std::string& pk);
@@ -216,7 +201,12 @@ public:
     bool load_encrypted_file(const std::string& file_id, std::string& ciphertext);
     std::vector<std::string> list_all_files();
     std::vector<std::string> list_files_by_pk(const std::string& PK);
+
+    // 辅助函数（统一驼峰命名）
+    std::string bytesToHex(const unsigned char* data, size_t len);
+    std::vector<unsigned char> hexToBytes(const std::string& hex);
     
+
     // ========== Getters ==========
     
     std::string get_node_id() const {
@@ -269,6 +259,17 @@ public:
     }
     
     void print_detailed_status();
+
+    // 密码学函数（修改为void返回值）
+    void computeHashH1(const std::string& input, mpz_t result);
+    void computeHashH2(const std::string& input, element_t result);
+    std::string computeHashH3(const std::string& input);
+    void compute_prf(mpz_t result, const std::string& seed, const std::string& ID_F, int index);
+    std::string decrypt_pointer(const std::string& current_state_hash, const std::string& encrypted_pointer);
+    
+    // 序列化辅助函数（与client.cpp统一，方案A核心修改）
+    std::string serializeElement(element_t elem);
+    bool deserializeElement(const std::string& hex_str, element_t elem);
 };
 
 #endif // STORAGE_NODE_H

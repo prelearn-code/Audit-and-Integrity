@@ -82,12 +82,13 @@ bool verifyFileProof(
     const std::string& phi_hex,
     const std::string& g_hex,
     const std::string& mu_hex,
-    const std::vector<std::string>& TS_F_hex)
+    const std::string& seed,
+    const std::vector<std::string>& TS_F_hex,
+    const std::string& ID_F,
+    const std::string& PK
+)
 {
-    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
-    std::cout << "🔐 开始验证文件证明" << std::endl;
-    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
-    
+    StorageNode node; //调用辅助函数
     // 初始化 element
     element_t  phi, g, mu;
     mpz_t psi;
@@ -96,42 +97,19 @@ bool verifyFileProof(
     element_init_G1(mu, pairing);
     
     // 反序列化参数
-    std::cout << "📥 步骤 1: 反序列化证明数据..." << std::endl;
     
     mpz_init(psi);
     mpz_set_str(psi, psi_hex.c_str(), 16);
-    std::cout << "✅ psi 反序列化成功 (长度: " << psi_hex.length() << ")" << std::endl;
+
     
-    if (!deserializeElement(phi_hex, phi)) {           
-        std::cerr << "❌ phi 反序列化失败" << std::endl;
-        element_clear(psi); element_clear(phi); 
-        element_clear(g); element_clear(mu);
-        return false;
-    }
-    std::cout << "✅ phi 反序列化成功 (长度: " << phi_hex.length() << ")" << std::endl;
+    if (!deserializeElement(phi_hex, phi)) return false;
+    if (!deserializeElement(g_hex, g)) return false;
+    if (!deserializeElement(mu_hex, mu)) return false;
     
-    if (!deserializeElement(g_hex, g)) {
-        std::cerr << "❌ g 反序列化失败" << std::endl;
-        element_clear(psi); element_clear(phi); 
-        element_clear(g); element_clear(mu);
-        return false;
-    }
-    std::cout << "✅ g 反序列化成功 (长度: " << g_hex.length() << ")" << std::endl;
-    
-    if (!deserializeElement(mu_hex, mu)) {
-        std::cerr << "❌ mu 反序列化失败" << std::endl;
-        element_clear(psi); element_clear(phi); 
-        element_clear(g); element_clear(mu);
-        return false;
-    }
-    std::cout << "✅ mu 反序列化成功 (长度: " << mu_hex.length() << ")" << std::endl;
-    
-    // 验证标签数量
-    std::cout << "\n📊 步骤 2: 验证标签信息..." << std::endl;
-    std::cout << "标签数量: " << TS_F_hex.size() << std::endl;
-    
-    // 计算配对
-    std::cout << "\n🔢 步骤 3: 计算双线性配对..." << std::endl;
+    // 计算mu^psi
+    element_pow_mpz(mu, mu, psi);
+    std::cout << "✅ 计算 mu^psi 成功" << std::endl;
+
     
     element_t left, right;
     element_init_GT(left, pairing);
@@ -139,39 +117,59 @@ bool verifyFileProof(
     
     // 计算 e(psi, g)
     std::cout << "计算 e(psi, g)..." << std::endl;
-    pairing_apply(left, psi, g, pairing);
+
+    pairing_apply(left, phi, g, pairing);
     
-    // 计算 e(phi, mu)
-    std::cout << "计算 e(phi, mu)..." << std::endl;
-    pairing_apply(right, phi, mu, pairing);
-    
+    // right
+    std::cout << "计算 e(zeta*mu^psi,pk)" << std::endl;
+    element_t zeta_mu_psi;
+    element_init_G1(zeta_mu_psi, pairing);
+    element_set(zeta_mu_psi, mu);
+    for(int i = 0; i < TS_F_hex.size(); ++i)
+    {
+        element_t h2_temp;
+        mpz_t prf_temp;
+        element_init_G1(h2_temp, pairing);
+        mpz_init(prf_temp);
+        node.compute_prf(prf_temp, seed, ID_F, i);
+        std::string id_with_index = ID_F + std::to_string(i);
+        node.computeHashH2(id_with_index ,h2_temp);
+        
+        element_t temp_pow;
+        element_init_G1(temp_pow, pairing);
+        element_pow_mpz(temp_pow, h2_temp, prf_temp);
+        
+
+        element_mul(zeta_mu_psi, zeta_mu_psi, temp_pow);
+        element_clear(h2_temp);
+        mpz_clear(prf_temp);
+        element_clear(temp_pow);
+    }
+    element_t pk;
+    element_init_G1(pk, pairing);
+    if (!deserializeElement(PK, pk)) return false;
+
+    pairing_apply(right, zeta_mu_psi, pk, pairing);
+
     // 验证等式: e(psi, g) = e(phi, mu)
-    std::cout << "\n✓ 步骤 4: 验证等式 e(psi, g) = e(phi, mu)..." << std::endl;
     
     bool result = (element_cmp(left, right) == 0);
-    
-    // 输出详细信息
-    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
-    std::cout << "📋 验证详情:" << std::endl;
-    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     
     // 显示左边值
     char* left_str = new char[element_length_in_bytes(left) * 2 + 100];
     element_snprint(left_str, element_length_in_bytes(left) * 2 + 100, left);
-    std::cout << "e(psi, g)  = " << std::string(left_str).substr(0, 60) << "..." << std::endl;
+    std::cout << "e(phi, g)  = " << std::string(left_str).substr(0, 60) << "..." << std::endl;
     delete[] left_str;
     
     // 显示右边值
     char* right_str = new char[element_length_in_bytes(right) * 2 + 100];
     element_snprint(right_str, element_length_in_bytes(right) * 2 + 100, right);
-    std::cout << "e(phi, mu) = " << std::string(right_str).substr(0, 60) << "..." << std::endl;
+    std::cout << "e(zeta*mu^psi,pk) = " << std::string(right_str).substr(0, 60) << "..." << std::endl;
     delete[] right_str;
     
     std::cout << "\n等式结果: " << (result ? "相等 ✓" : "不相等 ✗") << std::endl;
-    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     
     // 清理
-    element_clear(psi);
     element_clear(phi);
     element_clear(g);
     element_clear(mu);
@@ -185,28 +183,16 @@ bool verifyFileProof(
  * 主测试函数
  */  
 int main() {
-    std::cout << "\n";
-    std::cout << "╔═══════════════════════════════════════════════════╗\n";
-    std::cout << "║     文件证明验证测试 - 简化版                    ║\n";
-    std::cout << "║     File Proof Verification Test (Simple)        ║\n";
-    std::cout << "╚═══════════════════════════════════════════════════╝\n";
-    std::cout << std::endl;
-    
-    // ============================================
-    // 在这里定义所有测试参数
-    // ============================================
-    
-    std::cout << "📝 定义测试参数...\n" << std::endl;
+
     
     // 1. 文件标识信息
     std::string ID_F = "29623136847719743332609599635319152073467003710545598034443509938335505712094";
     std::string PK = "0b97c9dd3c4a8a90ca1cdb176e9371560aafca31d731bd206b1a71cd22b41150c6f174cc714cb0ca4e010cd732db3eb058235001f10d9e7ae974e69e3cad33e097c7131975117f1d1945e09c7a9e529e30e964ec6e173cfada128a5320fe82dadd6ba055fc2a6423383ed1069438ae72eae926c30a35160d50c7d192d81c5c71"; // 示例公钥
-    
+    std::string seed = "2681e7985a73b14c3d9d5c6110ff8bce34d9feaf666a382982b46bd2d11a2c7a";
+
     std::cout << "文件 ID: " << ID_F << std::endl;
     std::cout << "公钥 PK: " << PK << std::endl;
-    
-    // 2. 配对参数字符串 (Type A曲线)
-    // 这是一个示例配对参数，实际使用时应该从 public_params.json 读取
+
     const char* param_str = 
         "type a\n"
         "q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791\n"
@@ -218,16 +204,9 @@ int main() {
         "sign0 1\n";
     
     // 3. 初始化配对
-    std::cout << "\n🔧 初始化配对参数..." << std::endl;
     pairing_t pairing;
-    if (pairing_init_set_buf(pairing, param_str, strlen(param_str)) != 0) {
-        std::cerr << "❌ 配对初始化失败" << std::endl;
-        return 1;
-    }
-    std::cout << "✅ 配对参数初始化成功" << std::endl;
-    
-    // 4. 公共参数 (十六进制字符串格式)
-    // 注意：这些是示例数据，实际使用时需要替换为真实的参数
+    pairing_init_set_buf(pairing, param_str, strlen(param_str));
+
     
     // N (大素数，mpz_t类型，十六进制)
     std::string N_hex = "77100882147323929259202707660697850182257322147504210450519405245425484999510534240288025446710114574437574014076458251591453146776013641689093802143952936303738599772833586128652280514157551668081419186182299772668216085721727589152216703947487484154379286657216379752967775433235508106221969798811366993681";
@@ -238,11 +217,6 @@ int main() {
     // mu (G1群元素，十六进制)
     std::string mu_hex = "0e231739ec082c1972c9dcfc31351bcd2e8a44f5a94e370ec8eed3902402cef20ff24950713d29dd42c0549eb16c4706bedbebf519a73fe76e5231cf55ed400c9591efe922d84862ada73dab6d1ecf677e78483fe94dd54e1471aba4bfda571a59db52cc112348dfea6963d6105d290ceba7335aeaebeb7674f908eaefcf0bc9"; // 示例数据，需替换为真实值
     
-    std::cout << "\n📊 公共参数:" << std::endl;
-    std::cout << "N  = " << N_hex.substr(0, 40) << "..." << std::endl;
-    std::cout << "g  = " << g_hex.substr(0, 40) << "..." << std::endl;
-    std::cout << "mu = " << mu_hex.substr(0, 40) << "..." << std::endl;
-    
     // 5. 文件证明数据 (十六进制字符串格式)
     // 注意：这些是示例数据，实际使用时需要替换为从 GetFileProof 生成的真实数据
     
@@ -252,10 +226,6 @@ int main() {
     // phi (φ - 累积签名，G1群元素)
     std::string phi_hex = "63c0bc2ba31edf6b6c3eaaf2bd196b592e023eb1e2d0a5bc9791e117dfd4232de6cc7d95607ed7c596fb762144aa0a371b5960b8d5d35845d1b020222c601d8614d2c1b542a468f77b2c840e7253fc1e632af906f93bf0c50b9e1234b432b33bdda55ec96e893d26dd744876137d3f3ed713348df2fb936a292023bedb818d6d"; // 示例数据，需替换为真实值
     
-    std::cout << "\n🔐 证明数据:" << std::endl;
-    std::cout << "psi = " << psi_hex.substr(0, 40) << "..." << std::endl;
-    std::cout << "phi = " << phi_hex.substr(0, 40) << "..." << std::endl;
-    
     // 6. 文件认证标签集合 (TS_F)
     std::vector<std::string> TS_F_hex;
     TS_F_hex.push_back("4168db53e17a10752582c988d9d72ad274e3a966beee4e74885e9166a70d99f4967c7161e90ca9edc8bf0395c22a73c072fa52ddc05245647154c92d9ae7b8ca43a84516baa8fd3311311e60916da2d1befc08029ca1436cb9d3efd240dfe8a00038e325fe9f3669c361de79eaa5681509a4c3a52027e1fd478b4a6f2984adcf");
@@ -263,36 +233,20 @@ int main() {
     TS_F_hex.push_back("941f1cfb6473e6147b2a841bd217f88a120d44eb726e596986fe6a3e9d1e21af6b2746b0e09d194d9b4015ed9386195b2dfac61573bc842dda74a58c60eb4e027d76caf27333620e0982688c8236af1071f7661af709f30d05e5260f1553ded6ffb4f22a54c8a04900e3b6c5f66ce633b9a549ba43edf7c0fe298f08dd8a1a62");
     TS_F_hex.push_back("76de7a9d4e8cd1179a9bdc05c2817b33b125416a36e8d10a807841d2ee31b95d5f78a77034ed904cd4d6abdd694bc039bcc7b821c470674716616c478798699f1b30889b09db6184c96d312079b1d85df16d83fd9a2dc12b6b5a02b18251fa0267d41bb390a9d2e6564c1551eeae1d6ac0374b836ddb1bdc4a04690cff5a9af2");
     
-    std::cout << "\n📋 认证标签:" << std::endl;
-    std::cout << "标签数量: " << TS_F_hex.size() << std::endl;
-    for (size_t i = 0; i < TS_F_hex.size(); ++i) {
-        std::cout << "  TS_F[" << i << "] = " 
-                  << TS_F_hex[i].substr(0, 30) << "..." << std::endl;
-    }
-    
-    // ============================================
     // 执行验证
-    // ============================================
-    
-    std::cout << "\n" << std::string(50, '=') << std::endl;
-    std::cout << "开始验证..." << std::endl;
-    std::cout << std::string(50, '=') << std::endl;
-    
+
     bool verification_result = verifyFileProof(
         pairing,
         psi_hex,
         phi_hex,
         g_hex,
         mu_hex,
-        TS_F_hex
+        seed,
+        TS_F_hex,
+        ID_F,
+        PK
     );
     
-    // ============================================
-    // 输出最终结果
-    // ============================================
-    
-    std::cout << "\n";
-    std::cout << "╔═══════════════════════════════════════════════════╗\n";
     if (verification_result) {
         std::cout << "║  ✅ 验证成功！文件证明有效                        ║\n";
         std::cout << "║  文件数据完整性得到确认                          ║\n";
@@ -300,8 +254,6 @@ int main() {
         std::cout << "║  ❌ 验证失败！文件证明无效                        ║\n";
         std::cout << "║  文件可能已被篡改或证明数据不正确                ║\n";
     }
-    std::cout << "╚═══════════════════════════════════════════════════╝\n";
-    std::cout << std::endl;
     
     // 清理
     pairing_clear(pairing);
