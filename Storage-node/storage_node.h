@@ -57,7 +57,7 @@ struct FileProof {
 };
 
 /**
- * StorageNode - 去中心化存储节点 (本地版 v3.6)
+ * StorageNode - 去中心化存储节点 (本地版 v3.8)
  * 
  * 特性:
  * - ✅ 完全本地化存储
@@ -72,6 +72,7 @@ struct FileProof {
  * - ✅ 文件分块处理和证明生成
  * - ✅ 新增删除和搜索证明功能
  * - ✅ 新增文件证明生成和验证功能
+ * - ✅ v3.8: 统一序列化函数，添加错误检查（方案A）
  */
 class StorageNode {
 private:
@@ -109,7 +110,10 @@ private:
     
     // 辅助函数
     std::string generate_random_seed();
-    std::vector<unsigned char> hexToBytes(const std::string& hex);
+    
+    // 序列化辅助函数（与client.cpp统一，方案A核心修改）
+    std::string serializeElement(element_t elem);
+    bool deserializeElement(const std::string& hex_str, element_t elem);
     
     // JSON文件操作
     Json::Value load_json_from_file(const std::string& filepath);
@@ -122,9 +126,9 @@ private:
     bool create_directory(const std::string& dirpath);
     std::string get_current_timestamp();
     
-    // 辅助函数
-    std::string bytes_to_hex(const unsigned char* data, size_t len);
-    std::vector<unsigned char> hex_to_bytes(const std::string& hex);
+    // 辅助函数（统一驼峰命名）
+    std::string bytesToHex(const unsigned char* data, size_t len);
+    std::vector<unsigned char> hexToBytes(const std::string& hex);
     
     // 身份验证
     bool verify_pk_format(const std::string& pk);
@@ -260,7 +264,7 @@ public:
         std::cout << "端口:         " << server_port << std::endl;
         std::cout << "文件数:       " << get_index_count() << std::endl;
         std::cout << "密码学:       " << (crypto_initialized ? "已初始化" : "未初始化") << std::endl;
-        std::cout << "版本:         v3.6 (新增文件证明生成和验证)" << std::endl;
+        std::cout << "版本:         v3.8 (统一序列化函数+错误检查)" << std::endl;
         std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     }
     

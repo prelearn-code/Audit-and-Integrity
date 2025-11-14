@@ -34,7 +34,7 @@ add_executable(storage_node
     main.cpp
     storage_node.cpp
 )
-
+set(CMAKE_BUILD_TYPE Debug)
 # 链接库
 target_link_libraries(storage_node
     ${OPENSSL_LIBRARIES}

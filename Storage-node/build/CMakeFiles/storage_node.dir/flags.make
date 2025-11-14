@@ -6,5 +6,5 @@ CXX_DEFINES =
 
 CXX_INCLUDES = -I/home/zsw/codes/Audit-and-Integrity/Storage-node -I/usr/include/jsoncpp
 
-CXX_FLAGS =  -Wall -Wextra -std=gnu++17
+CXX_FLAGS =  -Wall -Wextra -g -g -O0 -std=gnu++17
 

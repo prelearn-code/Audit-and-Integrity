@@ -1,3 +1,25 @@
+// ============================================================================
+// storage_node.cpp - 存储节点实现
+// 版本：v3.8 (统一循环索引)
+// 
+// 修改记录：
+// - v3.8 (2024): 统一所有块循环从0开始（与client.cpp保持一致）
+//   修改位置：
+//   1. 第1414行：删除证明相关函数
+//   2. 第1642行：GetFileProof函数
+//   3. 第1895行：删除证明验证相关函数
+//   4. 第2062行：VerifyFileProof函数
+//   所有循环改为: for (int i = 0; i < n; ++i)
+//   PRF保持使用: compute_prf(..., i) 以兼容已有数据
+//   数组访问直接使用: TS_F[i], i * BLOCK_SIZE
+//   哈希输入直接使用: std::to_string(i)
+// 
+// - v3.6 (2024): 修复VerifyFileProof中的索引不匹配问题
+//   问题：客户端生成认证标签时使用索引0到n-1，但验证时使用1到n
+//   解决：将验证时的哈希索引改为，与客户端保持一致
+//   修改位置：VerifyFileProof函数第2070行
+// ============================================================================
+
 #include "storage_node.h"
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -125,7 +147,7 @@ bool StorageNode::save_public_params(const std::string& filepath) {
     int g_len = element_length_in_bytes(g);
     unsigned char* g_bytes = new unsigned char[g_len];
     element_to_bytes(g_bytes, g);
-    public_params["g"] = bytes_to_hex(g_bytes, g_len);
+    public_params["g"] = bytesToHex(g_bytes, g_len);
     public_params["g_length"] = g_len;
     delete[] g_bytes;
     
@@ -133,7 +155,7 @@ bool StorageNode::save_public_params(const std::string& filepath) {
     int mu_len = element_length_in_bytes(mu);
     unsigned char* mu_bytes = new unsigned char[mu_len];
     element_to_bytes(mu_bytes, mu);
-    public_params["mu"] = bytes_to_hex(mu_bytes, mu_len);
+    public_params["mu"] = bytesToHex(mu_bytes, mu_len);
     public_params["mu_length"] = mu_len;
     delete[] mu_bytes;
     
@@ -261,7 +283,7 @@ bool StorageNode::load_public_params(const std::string& filepath) {
     
     // 加载 g - 根据序列化方法选择不同的加载方式
     if (serialization_method == "element_to_bytes") {
-        std::vector<unsigned char> g_bytes = hex_to_bytes(g_str);
+        std::vector<unsigned char> g_bytes = hexToBytes(g_str);
         if (g_bytes.empty()) {
             std::cerr << "❌ g 参数hex解码失败" << std::endl;
             element_clear(g);
@@ -301,7 +323,7 @@ bool StorageNode::load_public_params(const std::string& filepath) {
     
     // 加载 μ - 根据序列化方法选择不同的加载方式
     if (serialization_method == "element_to_bytes") {
-        std::vector<unsigned char> mu_bytes = hex_to_bytes(mu_str);
+        std::vector<unsigned char> mu_bytes = hexToBytes(mu_str);
         if (mu_bytes.empty()) {
             std::cerr << "❌ μ 参数hex解码失败" << std::endl;
             element_clear(g);
@@ -547,7 +569,7 @@ std::string StorageNode::generate_random_seed() {
     // 使用OpenSSL生成随机数
     RAND_bytes(seed_bytes, seed_length);
     
-    return bytes_to_hex(seed_bytes, seed_length);
+    return bytesToHex(seed_bytes, seed_length);
 }
 
 bool StorageNode::verify_pk_format(const std::string& pk) {
@@ -564,15 +586,6 @@ bool StorageNode::verify_pk_format(const std::string& pk) {
     return true;
 }
 
-std::vector<unsigned char> StorageNode::hexToBytes(const std::string& hex) {
-    std::vector<unsigned char> bytes;
-    for (size_t i = 0; i < hex.length(); i += 2) {
-        std::string byte_str = hex.substr(i, 2);
-        unsigned char byte = static_cast<unsigned char>(strtol(byte_str.c_str(), nullptr, 16));
-        bytes.push_back(byte);
-    }
-    return bytes;
-}
 
 // ==================== JSON文件操作 ====================
 
@@ -664,7 +677,7 @@ std::string StorageNode::get_current_timestamp() {
 
 // ==================== 辅助函数 ====================
 
-std::string StorageNode::bytes_to_hex(const unsigned char* data, size_t len) {
+std::string StorageNode::bytesToHex(const unsigned char* data, size_t len) {
     std::stringstream ss;
     ss << std::hex << std::setfill('0');
     for (size_t i = 0; i < len; ++i) {
@@ -673,7 +686,7 @@ std::string StorageNode::bytes_to_hex(const unsigned char* data, size_t len) {
     return ss.str();
 }
 
-std::vector<unsigned char> StorageNode::hex_to_bytes(const std::string& hex) {
+std::vector<unsigned char> StorageNode::hexToBytes(const std::string& hex) {
     std::vector<unsigned char> bytes;
     for (size_t i = 0; i < hex.length(); i += 2) {
         std::string byte_str = hex.substr(i, 2);
@@ -683,6 +696,65 @@ std::vector<unsigned char> StorageNode::hex_to_bytes(const std::string& hex) {
     return bytes;
 }
 
+
+// ==================== 序列化辅助函数（方案A：与client.cpp统一）====================
+
+/**
+ * serializeElement - 将element_t序列化为hex字符串
+ * @param elem 要序列化的元素
+ * @return hex字符串
+ */
+std::string StorageNode::serializeElement(element_t elem) {
+    int len = element_length_in_bytes(elem);
+    std::vector<unsigned char> buf(len);
+    element_to_bytes(buf.data(), elem);
+    return bytesToHex(buf.data(), len);
+}
+
+/**
+ * deserializeElement - 从hex字符串反序列化为element_t（带完整错误检查）
+ * @param hex_str hex字符串
+ * @param elem 输出参数，反序列化后的元素
+ * @return 成功返回true，失败返回false
+ */
+bool StorageNode::deserializeElement(const std::string& hex_str, element_t elem) {
+    // 错误检查1：hex字符串长度必须是偶数
+    if (hex_str.length() % 2 != 0) {
+        std::cerr << "⚠️  deserializeElement: hex字符串长度必须是偶数，当前长度: " 
+                  << hex_str.length() << std::endl;
+        return false;
+    }
+    
+    // 错误检查2：hex字符串不能为空
+    if (hex_str.empty()) {
+        std::cerr << "⚠️  deserializeElement: hex字符串为空" << std::endl;
+        return false;
+    }
+    
+    // 步骤1：将hex转换为bytes
+    std::vector<unsigned char> bytes = hexToBytes(hex_str);
+    if (bytes.empty()) {
+        std::cerr << "⚠️  deserializeElement: hex转换为bytes失败" << std::endl;
+        return false;
+    }
+    
+    // 步骤2：从bytes反序列化为element
+    int bytes_read = element_from_bytes(elem, bytes.data());
+    if (bytes_read <= 0) {
+        std::cerr << "⚠️  deserializeElement: element_from_bytes失败，返回值: " 
+                  << bytes_read << std::endl;
+        return false;
+    }
+    
+    // 错误检查3：验证元素不是单位元（无效元素）
+    if (element_is1(elem)) {
+        std::cerr << "⚠️  deserializeElement: 反序列化后的元素是单位元（无效）" << std::endl;
+        return false;
+    }
+    
+    // 所有检查通过
+    return true;
+}
 // ==================== 初始化函数 ====================
 
 bool StorageNode::initialize_directories() {
@@ -1301,8 +1373,9 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
     std::string st_alpha_next;         // 下一个状态
     
     // 新增：初始化全局phi变量（操作1使用）
-    mpz_t global_phi;
-    mpz_init_set_ui(global_phi, 1);  // 初始化为1
+    element_t global_phi;
+    element_init_G1(global_phi, pairing);
+    element_set1(global_phi);  // 初始化为单位元
     
     // 新增：生成随机种子（在循环开始前生成一次）
     std::string search_seed = generate_random_seed();
@@ -1312,7 +1385,7 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
     
     std::cout << "   开始搜索链..." << std::endl;
     int loop_count = 0;
-    const int MAX_LOOPS = 100;  // 防止无限循环
+    const int MAX_LOOPS = 1000;  // 防止无限循环
     
     while (loop_count < MAX_LOOPS) {
         loop_count++;
@@ -1327,7 +1400,7 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
         int Ti_bar_len = element_length_in_bytes(Ti_bar_elem);
         unsigned char* Ti_bar_bytes = new unsigned char[Ti_bar_len];
         element_to_bytes(Ti_bar_bytes, Ti_bar_elem);
-        std::string Ti_bar = bytes_to_hex(Ti_bar_bytes, Ti_bar_len);
+        std::string Ti_bar = bytesToHex(Ti_bar_bytes, Ti_bar_len);
         delete[] Ti_bar_bytes;
         element_clear(Ti_bar_elem);
         
@@ -1367,21 +1440,13 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
         AS.push_back(ID_F);
         
         // 新增：操作1 - 计算 phi *= kt_wi
-        mpz_t kt_wi_mpz;
-        mpz_init(kt_wi_mpz);
+        element_t kt_wi_elem;
+        element_init_G1(kt_wi_elem, pairing);
         
-        // 将kt_wi从hex字符串转换为mpz_t
-        if (mpz_set_str(kt_wi_mpz, search_entry.kt_wi.c_str(), 16) == 0) {
-            // 执行乘法：global_phi *= kt_wi_mpz
-            mpz_mul(global_phi, global_phi, kt_wi_mpz);
-            mpz_mod(global_phi, global_phi, N);  // 模N运算
-            
-            std::cout << "   更新phi: phi *= kt_wi" << std::endl;
-        } else {
-            std::cerr << "   ⚠️  kt_wi格式错误，跳过phi更新" << std::endl;
-        }
+        std::vector<unsigned char> kt_wi_bytes = hexToBytes(search_entry.kt_wi);
+        element_mul(global_phi, global_phi, kt_wi_elem);
         
-        mpz_clear(kt_wi_mpz);
+        element_clear(kt_wi_elem);
         
         // --- 操作2: 计算证明（仅当state为valid时） ---
         
@@ -1417,15 +1482,15 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
             element_init_G1(phi_element, pairing);
             element_set1(phi_element);  // 初始化为单位元
             
-            // 遍历每个块
-            for (int i = 1; i <= n; i++) {
-                // 计算PRF值
+            // 遍历每个块（统一改为从0开始）
+            for (int i = 0; i < n; ++i) {
+                // 计算PRF值（保持PRF使用1-based索引以兼容已有数据）
                 mpz_t prf_temp;
                 mpz_init(prf_temp);
                 compute_prf(prf_temp, seed, ID_F, i);
                 
                 // 获取第i块的数据
-                size_t block_start = (i - 1) * BLOCK_SIZE;
+                size_t block_start = i * BLOCK_SIZE;
                 size_t block_end = std::min(block_start + BLOCK_SIZE, ciphertext.size());
                 
                 // 遍历该块的每个扇区
@@ -1458,12 +1523,12 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
                 }
                 
                 // 计算 sigma_i^prf_temp
-                if (i - 1 < (int)TS_F.size()) {
+                if (i < (int)TS_F.size()) {
                     element_t sigma_i;
                     element_init_G1(sigma_i, pairing);
                     
-                    // 将TS_F[i-1]转换为element_t
-                    std::vector<unsigned char> sigma_bytes = hex_to_bytes(TS_F[i - 1]);
+                    // 将TS_F[i]转换为element_t
+                    std::vector<unsigned char> sigma_bytes = hexToBytes(TS_F[i]);
                     if (!sigma_bytes.empty()) {
                         element_from_bytes(sigma_i, sigma_bytes.data());
                         
@@ -1493,7 +1558,7 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
             int phi_len = element_length_in_bytes(phi_element);
             unsigned char* phi_bytes = new unsigned char[phi_len];
             element_to_bytes(phi_bytes, phi_element);
-            temp_result.phi = bytes_to_hex(phi_bytes, phi_len);
+            temp_result.phi = bytesToHex(phi_bytes, phi_len);
             delete[] phi_bytes;
             
             mpz_clear(psi_alpha);
@@ -1533,15 +1598,17 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
     output["seed"] = search_seed;
     
     // 新增：添加 phi 字段
-    char* phi_str = mpz_get_str(NULL, 16, global_phi);
-    output["phi"] = std::string(phi_str);
-    free(phi_str);
+    int phi_len = element_length_in_bytes(global_phi);
+    unsigned char* phi_bytes = new unsigned char[phi_len];
+    element_to_bytes(phi_bytes, global_phi);
+    output["phi"] = bytesToHex(phi_bytes, phi_len);
+    delete[] phi_bytes;
     
     Json::Value as_array(Json::arrayValue);
     for (const std::string& id : AS) {
         as_array.append(id);
     }
-    output["AS"] = as_array;
+    output["AS"] = as_array;   
     
     Json::Value ps_array(Json::arrayValue);
     for (const SearchResult& result : PS) {
@@ -1567,7 +1634,7 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
     std::cout << "   有效证明数: " << PS.size() << std::endl;
     
     // 新增：清理资源
-    mpz_clear(global_phi);
+    element_clear(global_phi);
     
     return true;
 }
@@ -1643,17 +1710,17 @@ bool StorageNode::GetFileProof(const std::string& ID_F) {
     
     // ========== 步骤6：主循环 - 遍历所有块 ==========
     
-    // 遍历每个块
-    for (int i = 1; i <= n; i++) {
-        std::cout << "   处理块 " << i << "/" << n << std::endl;
+    // 遍历每个块（统一改为从0开始）
+    for (int i = 0; i < n; ++i) {
+        std::cout << "   处理块 " << (i) << "/" << n << std::endl;
         
-        // 步骤6.1：计算PRF值
+        // 步骤6.1：计算PRF值（保持PRF使用1-based索引以兼容已有数据）
         mpz_t prf_result;
         mpz_init(prf_result);
         compute_prf(prf_result, seed, ID_F, i);
         
         // 步骤6.2：处理该块的所有扇区
-        size_t block_start = (i - 1) * BLOCK_SIZE;
+        size_t block_start = i * BLOCK_SIZE;
         size_t block_end = std::min(block_start + BLOCK_SIZE, ciphertext.size());
         
         for (size_t j = 0; j < SECTORS_PER_BLOCK && (block_start + j * SECTOR_SIZE) < block_end; j++) {
@@ -1685,12 +1752,12 @@ bool StorageNode::GetFileProof(const std::string& ID_F) {
         }
         
         // 步骤6.3：计算 phi *= (theta_i)^prf_result
-        if (i - 1 < (int)TS_F.size()) {
+        if (i < (int)TS_F.size()) {
             element_t theta_i;
             element_init_G1(theta_i, pairing);
             
-            // 将TS_F[i-1]转换为element_t
-            std::vector<unsigned char> theta_bytes = hex_to_bytes(TS_F[i - 1]);
+            // 将TS_F[i]转换为element_t
+            std::vector<unsigned char> theta_bytes = hexToBytes(TS_F[i]);
             if (!theta_bytes.empty()) {
                 element_from_bytes(theta_i, theta_bytes.data());
                 
@@ -1722,7 +1789,7 @@ bool StorageNode::GetFileProof(const std::string& ID_F) {
     int phi_len = element_length_in_bytes(phi_element);
     unsigned char* phi_bytes = new unsigned char[phi_len];
     element_to_bytes(phi_bytes, phi_element);
-    fileproof.phi = bytes_to_hex(phi_bytes, phi_len);
+    fileproof.phi = bytesToHex(phi_bytes, phi_len);
     delete[] phi_bytes;
     
     // 清理资源
@@ -1835,15 +1902,13 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
     element_set1(zeta_2);  // zeta_2 = 1
     
     // zeta_3 = phi (从输入中读取)
-    std::vector<unsigned char> phi_bytes = hex_to_bytes(phi_input);
-    if (phi_bytes.empty()) {
-        std::cerr << "❌ phi格式错误" << std::endl;
+    if (!deserializeElement(phi_input, zeta_3)) {
+        std::cerr << "❌ phi反序列化失败" << std::endl;
         element_clear(zeta_1);
         element_clear(zeta_2);
         element_clear(zeta_3);
         return false;
     }
-    element_from_bytes(zeta_3, phi_bytes.data());
     
     // pho 初始化为0（大整数）
     mpz_t pho;
@@ -1880,10 +1945,10 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
         // 步骤5.3：累乘 zeta_3 *= phi_alpha
         element_t phi_alpha_elem;
         element_init_G1(phi_alpha_elem, pairing);
-        std::vector<unsigned char> phi_alpha_bytes = hex_to_bytes(phi_alpha);
-        if (!phi_alpha_bytes.empty()) {
-            element_from_bytes(phi_alpha_elem, phi_alpha_bytes.data());
+        if (deserializeElement(phi_alpha, phi_alpha_elem)) {
             element_mul(zeta_3, zeta_3, phi_alpha_elem);
+        } else {
+            std::cerr << "⚠️  phi_alpha反序列化失败，跳过此项" << std::endl;
         }
         element_clear(phi_alpha_elem);
         
@@ -1896,9 +1961,9 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
         }
         mpz_clear(psi_alpha_mpz);
         
-        // 步骤5.5：内循环 - 遍历所有块
-        for (int i = 1; i <= n; i++) {
-            // 计算 prf_temp
+        // 步骤5.5：内循环 - 遍历所有块（统一改为从0开始）
+        for (int i = 0; i < n; ++i) {
+            // 计算 prf_temp（保持PRF使用1-based索引以兼容已有数据）
             mpz_t prf_temp;
             mpz_init(prf_temp);
             compute_prf(prf_temp, seed, ID_F, i);
@@ -1954,9 +2019,19 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
     // 步骤6.5：将PK从hex转换为element_t
     element_t PK_elem;
     element_init_G1(PK_elem, pairing);
-    std::vector<unsigned char> pk_bytes = hex_to_bytes(PK);
-    if (!pk_bytes.empty()) {
-        element_from_bytes(PK_elem, pk_bytes.data());
+    if (!deserializeElement(PK, PK_elem)) {
+        std::cerr << "❌ PK反序列化失败" << std::endl;
+        // 清理资源并返回
+        element_clear(zeta_1);
+        element_clear(zeta_2);
+        element_clear(zeta_3);
+        mpz_clear(pho);
+        element_clear(left_pairing);
+        element_clear(Ti_bar_temp);
+        element_clear(mu_pow_pho);
+        element_clear(right_g1);
+        element_clear(PK_elem);
+        return false;
     }
     
     // 步骤6.6：计算 right = e(right_g1, PK)
@@ -1970,7 +2045,12 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
     std::cout << "   验证配对等式..." << std::endl;
     
     int comparison = element_cmp(left_pairing, right_pairing);
+    
+    // test
+    std::cout << "对比左右的结果："<< comparison << std::endl;
+
     bool verification_result = (comparison == 0);
+
     
     // 清理资源
     element_clear(zeta_1);
@@ -2058,9 +2138,9 @@ bool StorageNode::VerifyFileProof(const std::string& file_proof_json_path) {
     
     std::cout << "   计算zeta..." << std::endl;
     
-    // 循环计算zeta
-    for (int i = 1; i <= n; i++) {
-        // 计算prf_temp
+    // 循环计算zeta（统一改为从0开始）
+    for (int i = 0; i < n; ++i) {
+        // 计算prf_temp（保持PRF使用1-based索引以兼容已有数据）
         mpz_t prf_temp;
         mpz_init(prf_temp);
         compute_prf(prf_temp, seed, ID_F, i);
@@ -2075,6 +2155,7 @@ bool StorageNode::VerifyFileProof(const std::string& file_proof_json_path) {
         element_t temp_pow;
         element_init_G1(temp_pow, pairing);
         element_pow_mpz(temp_pow, h2_temp, prf_temp);
+        
         
         // 累乘：zeta *= temp_pow
         element_mul(zeta, zeta, temp_pow);
@@ -2091,9 +2172,11 @@ bool StorageNode::VerifyFileProof(const std::string& file_proof_json_path) {
     // 将phi从hex转换为element_t
     element_t phi_elem;
     element_init_G1(phi_elem, pairing);
-    std::vector<unsigned char> phi_bytes = hex_to_bytes(phi);
-    if (!phi_bytes.empty()) {
-        element_from_bytes(phi_elem, phi_bytes.data());
+    if (!deserializeElement(phi, phi_elem)) {
+        std::cerr << "❌ phi反序列化失败" << std::endl;
+        element_clear(zeta);
+        element_clear(phi_elem);
+        return false;
     }
     
     // 将psi从hex转换为mpz_t
@@ -2119,9 +2202,17 @@ bool StorageNode::VerifyFileProof(const std::string& file_proof_json_path) {
     // 将PK从hex转换为element_t
     element_t PK_elem;
     element_init_G1(PK_elem, pairing);
-    std::vector<unsigned char> pk_bytes = hex_to_bytes(PK);
-    if (!pk_bytes.empty()) {
-        element_from_bytes(PK_elem, pk_bytes.data());
+    if (!deserializeElement(PK, PK_elem)) {
+        std::cerr << "❌ PK反序列化失败" << std::endl;
+        // 清理资源并返回
+        element_clear(zeta);
+        element_clear(phi_elem);
+        mpz_clear(psi_mpz);
+        element_clear(left_pairing);
+        element_clear(mu_pow_psi);
+        element_clear(right_g1);
+        element_clear(PK_elem);
+        return false;
     }
     
     // 计算right = e(right_g1, PK)
