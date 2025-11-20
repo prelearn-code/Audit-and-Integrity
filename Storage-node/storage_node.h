@@ -75,7 +75,7 @@ struct FileProof {
  * - ✅ v3.8: 统一序列化函数，添加错误检查（方案A）
  */
 class StorageNode {
-private:
+public:
     // 文件分块常量
     static constexpr size_t BLOCK_SIZE = 4096;        // 加密文件分块大小（字节）
     static constexpr size_t SECTOR_SIZE = 256;        // 扇区大小（字节）
@@ -99,6 +99,8 @@ private:
     std::string data_dir;
     std::string files_dir;
     std::string metadata_dir;
+    std::string FileProofs_dir;
+    std::string SearchProof_dir;
     int server_port;
     
     // 辅助函数
@@ -118,7 +120,7 @@ private:
     // 身份验证
     bool verify_pk_format(const std::string& pk);
 
-public:
+// public
     StorageNode(const std::string& data_directory = "../data", int port = 9000);
     ~StorageNode();
     

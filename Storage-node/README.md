@@ -1178,3 +1178,6 @@ g++ -std=c++11 main.cpp storage_node.cpp -o storage_node \
 **文档版本**: 1.0  
 **最后更新**: 2024-11-12  
 **作者**: 去中心化存储项目团队
+
+
+$\prod_{d|40}d$

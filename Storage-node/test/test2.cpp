@@ -6,11 +6,6 @@
 #include <openssl/sha.h>
 #include "storage_node.h"
 
-/**
- * 诊断版本 - 详细输出调试信息
- */
-
-// 辅助函数：十六进制字符串转字节数组（增强版）
 std::vector<unsigned char> hexToBytes(const std::string& hex) {
     std::vector<unsigned char> bytes;
     
@@ -47,7 +42,6 @@ std::vector<unsigned char> hexToBytes(const std::string& hex) {
     return bytes;
 }
 
-// 辅助函数：从十六进制字符串反序列化element（诊断版）
 bool deserializeElement(const std::string& hex_str, element_t elem, const std::string& name, pairing_t pairing) {
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     std::cout << "🔍 反序列化 " << name << std::endl;

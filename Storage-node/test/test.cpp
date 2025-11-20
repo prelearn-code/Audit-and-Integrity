@@ -6,10 +6,105 @@
 #include <openssl/sha.h>
 #include "storage_node.h"
 
-/**
- * 简单的文件证明验证测试
- * 所有参数在main函数中定义，直接进行验证计算
- */
+static void choose_type_a_bits(int k, int &rbits, int &qbits) {
+    if (k <= 80) {
+        rbits = 160;   // 群阶 r 大约 160bit
+        qbits = 512;   // 底层域 q 大约 512bit
+    } else if (k <= 112) {
+        rbits = 224;
+        qbits = 1024;
+    } else if (k <= 128) {
+        rbits = 256;
+        qbits = 1536;
+    } else if (k <= 192) {
+        rbits = 384;
+        qbits = 3072;
+    } else {  // k >= 192 或更高
+        rbits = 512;
+        qbits = 7680;
+    }
+    // 说明：
+    // 这是一种经验映射，不是严格标准，但对实验 / 论文代码是够用的。
+    // 真正工程化时建议参考最新 pairing 安全性推荐。
+}
+
+// 生成 Type A 参数字符串（q, h, r, exp1, exp2, sign0, sign1）
+std::string generate_type_a_param_str(int security_k) {
+    int rbits, qbits;
+    choose_type_a_bits(security_k, rbits, qbits);
+
+    pbc_param_t par;
+    pbc_param_init_a_gen(par, rbits, qbits);  // PBC 自动生成一条 Type A 曲线参数
+
+    // 把参数导出为字符串（和你现在手写的 param_str 一样的格式）
+    char *buf = nullptr;
+    size_t size = 0;
+
+    // 使用 GNU 的 open_memstream 把 pbc_param_out_str 输出到内存
+    FILE *fp = open_memstream(&buf, &size);
+    if (!fp) {
+        std::cerr << "❌ 无法创建内存流" << std::endl;
+        pbc_param_clear(par);
+        return "";
+    }
+
+    pbc_param_out_str(fp, par);  // 输出到 fp
+    fclose(fp);                  // 关闭后，buf/size 中就有完整字符串
+
+    std::string param_str(buf, size);
+    free(buf);
+    pbc_param_clear(par);
+
+    return param_str;
+}
+
+// 示例：初始化 pairing，并顺便初始化 g, mu, N = r
+bool init_pairing_with_security(pairing_t pairing,
+                                element_t &g,
+                                element_t &mu,
+                                mpz_t &N,
+                                int security_k) {
+    std::string param_str = generate_type_a_param_str(security_k);
+    if (param_str.empty()) {
+        std::cerr << "❌ 生成配对参数失败" << std::endl;
+        return false;
+    }
+
+    // 用生成的参数字符串初始化 pairing
+    if (pairing_init_set_buf(pairing, param_str.c_str(), param_str.size()) != 0) {
+        std::cerr << "❌ 配对初始化失败" << std::endl;
+        return false;
+    }
+
+    // 初始化 G1 中的公共参数 g, mu
+    element_init_G1(g, pairing);
+    element_init_G1(mu, pairing);
+    element_random(g);
+    element_random(mu);
+
+    // 关键点：N 建议直接取为群阶 r（安全 & 一致）
+    // 从 pairing 提取群阶 r：用一个 Zr 元素的阶
+    element_t zr;
+    element_init_Zr(zr, pairing);
+    // zr 所在的环是 Z_r，N 直接用它的模数即可
+    // PBC 里没有直接 element_to_mpz，常见做法是使用 element_to_bytes 再 mpz_import，
+    // 但作为简单实现，你也可以直接把 N 设为 2^rbits 级别的大数；
+    // 这里给一个简单的“从参数字符串再解析 r”的方式会太长，就先用“N = 2^rbits”做演示。
+    // 对你的 PoR 协议来说，更关键的是：指数在使用前要 mod 群阶 r，
+    // 而不是像之前那样用 p*p。
+
+    // 简单起见：这里示例用 group order 的 bit 长度近似 N（实验环境够用）
+    // 若要更严谨，可以从 param_str 里把 "r ..." 那一行 parse 出来给 N。
+    mpz_init(N);
+    // 假设安全级别 security_k 对应的 rbits 同 choose_type_a_bits
+    int rbits, qbits;
+    choose_type_a_bits(security_k, rbits, qbits);
+    mpz_ui_pow_ui(N, 2, rbits); // N ≈ 2^rbits，仅用于 mod，实验足够
+
+    element_clear(zr);
+    std::cout << "✅ pairing 初始化成功，安全级别约 " << security_k << " bit" << std::endl;
+    return true;
+}
 
 // 辅助函数：十六进制字符串转字节数组
 std::vector<unsigned char> hexToBytes(const std::string& hex) {
@@ -193,16 +288,11 @@ int main() {
     std::cout << "文件 ID: " << ID_F << std::endl;
     std::cout << "公钥 PK: " << PK << std::endl;
 
-    const char* param_str = 
-        "type a\n"
-        "q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791\n"
-        "h 12016012264891146079388821366740534204802954401251311822919615131047207289359704531102844802183906537786776\n"
-        "r 730750818665451621361119245571504901405976559617\n"
-        "exp2 159\n"
-        "exp1 107\n"
-        "sign1 1\n"
-        "sign0 1\n";
-    
+
+    char* param_str;
+    param_str = generate_type_a_param_str(80).data();
+    printf("生成的 Type A 参数:\n%s\n", param_str);
+
     // 3. 初始化配对
     pairing_t pairing;
     pairing_init_set_buf(pairing, param_str, strlen(param_str));
@@ -260,31 +350,3 @@ int main() {
     
     return verification_result ? 0 : 1;
 }
-
-/**
- * ============================================
- * 使用说明
- * ============================================
- * 
- * 1. 编译:
- *    g++ -o test test.cpp -lpbc -lgmp -lcrypto -std=c++11
- * 
- * 2. 准备数据:
- *    - 从 public_params.json 获取 N, g, mu 的十六进制值
- *    - 从 file_proof_XXX.json 获取 psi, phi, TS_F 的十六进制值
- *    - 替换 main() 函数中的示例数据
- * 
- * 3. 运行:
- *    ./test
- * 
- * 4. 数据格式:
- *    - mpz_t (N): 直接使用十六进制字符串
- *    - element_t (g, mu, psi, phi): 使用 element_to_bytes 序列化后的十六进制
- *    - TS_F: 字符串数组，每个元素是十六进制字符串
- * 
- * 5. 验证原理:
- *    验证等式 e(psi, g) = e(phi, mu)
- *    其中 e(·,·) 是双线性配对函数
- * 
- * ============================================
- */

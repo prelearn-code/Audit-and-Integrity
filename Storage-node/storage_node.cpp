@@ -35,7 +35,8 @@ StorageNode::StorageNode(const std::string& data_directory, int port)
     
     files_dir = data_dir + "/EncFiles";
     metadata_dir = data_dir + "/metadata";
-    
+    FileProofs_dir = data_dir + "/FileProofs";
+    SearchProof_dir = data_dir + "/SearchProof";
     // 生成节点ID
     auto now = std::chrono::system_clock::now();
     auto timestamp = std::chrono::system_clock::to_time_t(now);
@@ -65,7 +66,7 @@ bool StorageNode::setup_cryptography(int security_param,
         "type a\n"
         "q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791\n"
         "h 12016012264891146079388821366740534204802954401251311822919615131047207289359704531102844802183906537786776\n"
-        "r 730750818665451621361119245571504901405976559617\n"
+        "r 730750818665451621361119245571504901405976559617\n" //群的阶，元素个数
         "exp2 159\n"
         "exp1 107\n"
         "sign1 1\n"
@@ -2240,7 +2241,7 @@ bool StorageNode::VerifyFileProof(const std::string& file_proof_json_path) {
     
     if (verification_result) {
         std::cout << "✅ 文件证明验证成功" << std::endl;
-    } else {
+    } else {     
         std::cout << "❌ 文件证明验证失败" << std::endl;
     }
     
