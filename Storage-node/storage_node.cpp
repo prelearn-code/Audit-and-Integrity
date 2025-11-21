@@ -92,8 +92,11 @@ bool StorageNode::setup_cryptography(int security_param,
     mpz_init(q);
     
     mpz_set_str(p, "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791", 10);
-    mpz_set_str(q, "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791", 10);
     
+    // mpz_nextprime(q, p);//可以进行替换
+    mpz_set_str(q, "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791", 10);
+
+
     // 计算 N = p × q
     mpz_mul(N, p, q);
     
@@ -283,84 +286,51 @@ bool StorageNode::load_public_params(const std::string& filepath) {
     std::cout << "   ✅ 加载 N (" << n_str.length() << " 位十进制数)" << std::endl;
     
     // 加载 g - 根据序列化方法选择不同的加载方式
-    if (serialization_method == "element_to_bytes") {
-        std::vector<unsigned char> g_bytes = hexToBytes(g_str);
-        if (g_bytes.empty()) {
-            std::cerr << "❌ g 参数hex解码失败" << std::endl;
-            element_clear(g);
-            element_clear(mu);
-            mpz_clear(N);
-            pairing_clear(pairing);
-            return false;
-        }
-        
-        int bytes_read = element_from_bytes(g, g_bytes.data());
-        if (bytes_read <= 0) {
-            std::cerr << "❌ g 参数反序列化失败 (element_from_bytes返回: " << bytes_read << ")" << std::endl;
-            element_clear(g);
-            element_clear(mu);
-            mpz_clear(N);
-            pairing_clear(pairing);
-            return false;
-        }
-        std::cout << "   ✅ 加载 g (bytes长度: " << g_bytes.size() << ")" << std::endl;
-    } else {
-        mpz_t g_mpz;
-        mpz_init(g_mpz);
-        if (mpz_set_str(g_mpz, g_str.c_str(), 10) != 0) {
-            std::cerr << "❌ g 参数格式错误" << std::endl;
-            mpz_clear(g_mpz);
-            element_clear(g);
-            element_clear(mu);
-            mpz_clear(N);
-            pairing_clear(pairing);
-            return false;
-        }
-        element_set_mpz(g, g_mpz);
-        mpz_clear(g_mpz);
-        std::cout << "   ✅ 加载 g (" << g_str.length() << " 位十进制数，使用兼容模式)" << std::endl;
-        std::cout << "   ⚠️  建议重新生成并保存公共参数以使用新格式" << std::endl;
+    // g的类型是element_t
+
+    std::vector<unsigned char> g_bytes = hexToBytes(g_str);
+    if (g_bytes.empty()) {
+        std::cerr << "❌ g 参数hex解码失败" << std::endl;
+        element_clear(g);
+        element_clear(mu);
+        mpz_clear(N);
+        pairing_clear(pairing);
+        return false;
     }
+        
+    int bytes_read = element_from_bytes(g, g_bytes.data());
+    if (bytes_read <= 0) {
+        std::cerr << "❌ g 参数反序列化失败 (element_from_bytes返回: " << bytes_read << ")" << std::endl;
+        element_clear(g);
+        element_clear(mu);
+        mpz_clear(N);
+        pairing_clear(pairing);
+        return false;
+    }
+    std::cout << "   ✅ 加载 g (bytes长度: " << g_bytes.size() << ")" << std::endl;
     
     // 加载 μ - 根据序列化方法选择不同的加载方式
-    if (serialization_method == "element_to_bytes") {
-        std::vector<unsigned char> mu_bytes = hexToBytes(mu_str);
-        if (mu_bytes.empty()) {
-            std::cerr << "❌ μ 参数hex解码失败" << std::endl;
-            element_clear(g);
-            element_clear(mu);
-            mpz_clear(N);
-            pairing_clear(pairing);
-            return false;
-        }
-        
-        int bytes_read = element_from_bytes(mu, mu_bytes.data());
-        if (bytes_read <= 0) {
-            std::cerr << "❌ μ 参数反序列化失败 (element_from_bytes返回: " << bytes_read << ")" << std::endl;
-            element_clear(g);
-            element_clear(mu);
-            mpz_clear(N);
-            pairing_clear(pairing);
-            return false;
-        }
-        std::cout << "   ✅ 加载 μ (bytes长度: " << mu_bytes.size() << ")" << std::endl;
-    } else {
-        mpz_t mu_mpz;
-        mpz_init(mu_mpz);
-        if (mpz_set_str(mu_mpz, mu_str.c_str(), 10) != 0) {
-            std::cerr << "❌ μ 参数格式错误" << std::endl;
-            mpz_clear(mu_mpz);
-            element_clear(g);
-            element_clear(mu);
-            mpz_clear(N);
-            pairing_clear(pairing);
-            return false;
-        }
-        element_set_mpz(mu, mu_mpz);
-        mpz_clear(mu_mpz);
-        std::cout << "   ✅ 加载 μ (" << mu_str.length() << " 位十进制数，使用兼容模式)" << std::endl;
-        std::cout << "   ⚠️  建议重新生成并保存公共参数以使用新格式" << std::endl;
+    std::vector<unsigned char> mu_bytes = hexToBytes(mu_str);
+    if (mu_bytes.empty()) {
+        std::cerr << "❌ μ 参数hex解码失败" << std::endl;
+        element_clear(g);
+        element_clear(mu);
+        mpz_clear(N);
+        pairing_clear(pairing);
+        return false;
     }
+
+    bytes_read = element_from_bytes(mu, mu_bytes.data());
+    if (bytes_read <= 0) {
+        std::cerr << "❌ μ 参数反序列化失败 (element_from_bytes返回: " << bytes_read << ")" << std::endl;
+        element_clear(g);
+        element_clear(mu);
+        mpz_clear(N);
+        pairing_clear(pairing);
+        return false;
+    }
+
+    std::cout << "   ✅ 加载 μ (bytes长度: " << mu_bytes.size() << ")" << std::endl;
     
     crypto_initialized = true;
     std::cout << "✅ 密码学系统已从公共参数恢复\n" << std::endl;
@@ -1693,7 +1663,7 @@ bool StorageNode::GetFileProof(const std::string& ID_F) {
     
     // 生成随机种子
     std::string seed = generate_random_seed();
-    std::cout << "   随机种子: " << seed.substr(0, 16) << "..." << std::endl;
+    std::cout << "   随机种子: " << seed << "..." << std::endl;
     
     // ========== 步骤5：初始化累积变量 ==========
     

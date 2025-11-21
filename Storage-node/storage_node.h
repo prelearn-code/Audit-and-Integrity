@@ -51,6 +51,8 @@ struct SearchResult {
 };
 
 // 文件证明结构体
+
+
 struct FileProof {
     std::string psi;   // ψ值（累积证明）
     std::string phi;   // φ值（累积签名）
@@ -118,6 +120,11 @@ public:
     std::string get_current_timestamp();
     
     // 身份验证
+    /**
+    *@brief 验证客户端公钥格式
+    *@param pk 客户端公钥字符串
+    *@return 验证通过返回true，失败返回false
+    */
     bool verify_pk_format(const std::string& pk);
 
 // public

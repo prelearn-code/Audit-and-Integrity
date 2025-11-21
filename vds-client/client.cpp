@@ -1310,6 +1310,7 @@ std::vector<std::vector<unsigned char>> StorageClient::splitIntoBlocks(
     return blocks;
 }
 
+// 元素到字符串的序列化与反序列化
 std::string StorageClient::serializeElement(element_t elem) {
     int len = element_length_in_bytes(elem);
     std::vector<unsigned char> buf(len);
