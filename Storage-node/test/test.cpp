@@ -6,17 +6,32 @@
 #include <openssl/sha.h>
 
 
-void testPairing();
 
+void testVerifyFileProof();
+void testGetFileProof();
+void computeHashH2(const std::string& input, element_t result);
+void compute_prf(mpz_t result, const std::string& seed, const std::string& ID_F, int index, mpz_t N);
+void computeHashH1(const std::string& input, mpz_t result, mpz_t N);
+bool deserializeElement(const std::string& hex_str, element_t elem);
+std::vector<unsigned char> hexToBytes(const std::string& hex);
+std::string bytesToHex(const unsigned char* data, size_t len);
 
 int main()
 {
-    testPairing();
+    testGetFileProof();
+    testVerifyFileProof();
     return 0;
+}
+void testGetFileProof()
+{
+    std::cout << "GetFileProof start" << std::endl;
+
+    
+    std::cout << "GetFileProof end" << std::endl;
 }
 
 
-void testPairing()
+void testVerifyFileProof()
 {
     const char* param_str = 
         "type a\n"
@@ -29,19 +44,172 @@ void testPairing()
         "sign0 1\n";
 
     pairing_t pairing;
-    pairing_t left_pairing, right_pairing;
     pairing_init_set_buf(pairing, param_str, strlen(param_str));
 
     std::cout << "✅ pairing 初始化成功" << std::endl;
 
-    mpz_t N_,sk_;
-    element_t pk_,g_,left,right;
+    mpz_t N,psi, h2_temp, prf_temp;
+    element_t pk,g,left,right,phi,mu,zeta_mu,mu_pow_psi;
 
-    std::string pk = "0b97c9dd3c4a8a90ca1cdb176e9371560aafca31d731bd206b1a71cd22b41150c6f174cc714cb0ca4e010cd732db3eb058235001f10d9e7ae974e69e3cad33e097c7131975117f1d1945e09c7a9e529e30e964ec6e173cfada128a5320fe82dadd6ba055fc2a6423383ed1069438ae72eae926c30a35160d50c7d192d81c5c71";
-    std::string g = "a0b41b546a2b80478d7f5e98f5ec150703a2fea61e69a5de9694b10bd8009a67461cafca84540ccf0e7d5170da267003308fd14de20cb5c6eaf913edbfe00697385d1115e98f5a0c91ac979dd153f6e52ea2271be39babab3cde10fc5613c09d3e442237a054e7458d98df69077e07bbf87f74322bacee29527c37dee33b3cf7";
-    std::string N_str = "77100882147323929259202707660697850182257322147504210450519405245425484999510534240288025446710114574437574014076458251591453146776013641689093802143952936303738599772833586128652280514157551668081419186182299772668216085721727589152216703947487484154379286657216379752967775433235508106221969798811366993681";
-    std::string sk = "1234567890123456789012345678901234567890";
+    mpz_init_set_str(N,"77100882147323929259202707660697850182257322147504210450519405245425484999510534240288025446710114574437574014076458251591453146776013641689093802143952936303738599772833586128652280514157551668081419186182299772668216085721727589152216703947487484154379286657216379752967775433235508106221969798811366993681",10);
 
+    std::string g_str = "26e20d2d87e9eba4cf32df7e0302b15adf21a1a5b4ea3ad1ac5d39fa20af8d67088a8fc5bf65f4509bc705cbe3f090ba095e1e2046edc5bf31d4636629a893894d81602b34c744c98622f0fad4f9ed99e3f8ee103203f4530b68bd3a2293b65e490314c60522dc99049151566df5bea465ac62c581f297ae14cc4fe55d99e6e4";
+    std::string pk_str = "9d098b372d6c8944b1c6119500b57ae1d06951a6c7563140ced8d66e59a50269cd5be7d2f25bcd289dfbfcbad4254fb9d62f21e6b436391e186aead8227fa63ba3be5cea8873f186c647c01d1918caca9c6769d9d33acbba09ac9da048b46e86cf728a8c9593be309e106b4d08b11b85b1d22ba12585606e195350fa264450d1";
+    std::string phi_str = "9fd5071feb60f66bcac37e7070ded740c2108ef8195b2d592365aede0a72e263b92a33de7b99f514419dc6f6a4d38e32f306cf52278d4d5a7f53d0eb7cd09373109ad0c3e7a0df716cffffe6a1ae5fa2cd5e3a2c5d1a920a3776daf763ff0d389c30e7094126d6316ae8eec7dc32a54649f844f30bb0d4a42ab62a7fdd205d64";
+    std::string psi_str = "423ce98e6ffb0028f3d67c6e5df2b4e7bb2d278c445c9f89a6c40109725cf3e413a7362d0b0fe163d7ed1dc76531eab0e4eaaa0459ff212339648fa5d33f1e6c0790e530c4cbf61cd8d91dd8f8d189ab5dedd600e15b820bac2378c9dd65ca87713c25d9a5ee5fd261010456d4e784d21d356dd095a39d7bdeac0d1a0597f208";
+    std::string ID_F = "84606356905417135441071610032132613430179155420263986033608988119595160690064";
+    std::string seed = "fb11610a83e1eab28714cb7363f4764f82b022f0c70d89c42b8d68a5f9f5c344";
+    std::string mu_str = "39d336c989c98716412307348cf14501464697941b4b46772467f2bcc5c9f700c53fa374d007d5a0d5f5fe8c0a129e716fa059adb0b814b3182f1afc562a8f468651a77ef07d78a0510ab3b85ce2773ef6a348753f01236a38adb5f4ef21368b507e04c929ab34345a4c4075a1a410c998f1dd72624bfcb828b3822b9399b3b7";
+
+    element_init_G1(g, pairing);
+    element_init_G1(pk, pairing);
+    element_init_G1(phi, pairing);
+    element_init_G1(mu, pairing);
+    element_init_GT(left, pairing);
+    element_init_GT(right, pairing);
+    element_init_G1(mu, pairing);
+    element_init_G1(zeta_mu, pairing);
+    element_init_G1(mu_pow_psi, pairing);
+    mpz_init(psi);
+    mpz_init(h2_temp);
+    mpz_init(prf_temp);
+    mpz_init_set_str(psi, psi_str.c_str(),10);
+
+
+    // 反序列化g
+    deserializeElement(g_str, g);
+    // 反序列化pk
+    deserializeElement(pk_str, pk);
+    // 反序列化phi
+    deserializeElement(phi_str, phi);
+
+    // 反序列化mu
+    deserializeElement(mu_str, mu);
+
+    // 计算left = e(phi, g)
+    pairing_apply(left, phi, g, pairing);
+
+
+    // 计算zeta
+    element_t zeta;
+    element_init_G1(zeta, pairing);
+    element_set1(zeta); // zeta 初始化为群的单位元
+    for(int i = 0; i<5; i++)
+    {
+        // 计算prf_temp
+        compute_prf(prf_temp, seed, ID_F, i, N);
+
+        // 计算h2_temp = H2(ID_F || i)
+        std::string id_with_index = ID_F + std::to_string(i);
+        element_t h2_temp;
+        element_init_G1(h2_temp, pairing);
+        computeHashH2(id_with_index, h2_temp);
+
+        // 计算h2_temp^prf_temp
+        element_t temp_pow;
+        element_init_G1(temp_pow, pairing);
+        element_pow_mpz(temp_pow, h2_temp, prf_temp);
+
+        // 累乘：zeta *= temp_pow
+        element_mul(zeta, zeta, temp_pow);
+
+        element_clear(h2_temp);
+        element_clear(temp_pow);
+    }
+
+    // 计算mu^psi
+    element_pow_mpz(mu_pow_psi, mu, psi);
+    element_mul(zeta_mu, zeta, mu_pow_psi);
+    // 计算right = e(zeta * mu^psi, pk)
+    pairing_apply(right, zeta_mu, pk, pairing);
+
+    // 比较left和right
+    int cmp = element_cmp(left, right);
+    if(cmp == 0)
+        std::cout << "Verify success" << std::endl; 
+    else
+        std::cout << "Verify failed" << std::endl;
     
+}
 
+void computeHashH2(const std::string& input, element_t result) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256(reinterpret_cast<const unsigned char*>(input.c_str()),
+           input.length(), hash);
+    
+    element_from_hash(result, hash, SHA256_DIGEST_LENGTH);
+}
+
+void compute_prf(mpz_t result, const std::string& seed, const std::string& ID_F, int index, mpz_t N) {
+    // 组合输入：seed + ID_F + index
+    std::string combined = seed + ID_F + std::to_string(index);
+    
+    // 使用computeHashH1计算哈希并直接设置到result
+    computeHashH1(combined, result, N);
+}
+
+void computeHashH1(const std::string& input, mpz_t result, mpz_t N) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256(reinterpret_cast<const unsigned char*>(input.c_str()),
+           input.length(), hash);
+    
+    mpz_import(result, SHA256_DIGEST_LENGTH, 1, 1, 0, 0, hash);
+    mpz_mod(result, result, N);
+}
+
+bool deserializeElement(const std::string& hex_str, element_t elem) {
+    // 错误检查1：hex字符串长度必须是偶数
+    if (hex_str.length() % 2 != 0) {
+        std::cerr << "⚠️  deserializeElement: hex字符串长度必须是偶数，当前长度: " 
+                  << hex_str.length() << std::endl;
+        return false;
+    }
+    
+    // 错误检查2：hex字符串不能为空
+    if (hex_str.empty()) {
+        std::cerr << "⚠️  deserializeElement: hex字符串为空" << std::endl;
+        return false;
+    }
+    
+    // 步骤1：将hex转换为bytes
+    std::vector<unsigned char> bytes = hexToBytes(hex_str);
+    if (bytes.empty()) {
+        std::cerr << "⚠️  deserializeElement: hex转换为bytes失败" << std::endl;
+        return false;
+    }
+    
+    // 步骤2：从bytes反序列化为element
+    int bytes_read = element_from_bytes(elem, bytes.data());
+    if (bytes_read <= 0) {
+        std::cerr << "⚠️  deserializeElement: element_from_bytes失败，返回值: " 
+                  << bytes_read << std::endl;
+        return false;
+    }
+    
+    // 错误检查3：验证元素不是单位元（无效元素）
+    if (element_is1(elem)) {
+        std::cerr << "⚠️  deserializeElement: 反序列化后的元素是单位元（无效）" << std::endl;
+        return false;
+    }
+    
+    // 所有检查通过
+    return true;
+}
+std::vector<unsigned char> hexToBytes(const std::string& hex) {
+    std::vector<unsigned char> bytes;
+    for (size_t i = 0; i < hex.length(); i += 2) {
+        std::string byte_str = hex.substr(i, 2);
+        unsigned char byte = static_cast<unsigned char>(strtol(byte_str.c_str(), nullptr, 16));
+        bytes.push_back(byte);
+    }
+    return bytes;
+}
+
+std::string bytesToHex(const unsigned char* data, size_t len) {
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0');
+    for (size_t i = 0; i < len; ++i) {
+        ss << std::setw(2) << static_cast<int>(data[i]);
+    }
+    return ss.str();
 }
