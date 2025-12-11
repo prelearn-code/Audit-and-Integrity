@@ -332,7 +332,8 @@ private:
     bool deserializeElement(const std::string& hex_str, element_t elem);
     
     std::string bytesToHex(const std::vector<unsigned char>& bytes);
-    
+    std::vector<unsigned char> hexToBytes(const std::string& hex);
+
     std::string getCurrentTimestamp();
     
     /**

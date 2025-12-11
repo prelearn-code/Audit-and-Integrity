@@ -1,25 +1,3 @@
-// ============================================================================
-// storage_node.cpp - 存储节点实现
-// 版本：v3.8 (统一循环索引)
-// 
-// 修改记录：
-// - v3.8 (2024): 统一所有块循环从0开始（与client.cpp保持一致）
-//   修改位置：
-//   1. 第1414行：删除证明相关函数
-//   2. 第1642行：GetFileProof函数
-//   3. 第1895行：删除证明验证相关函数
-//   4. 第2062行：VerifyFileProof函数
-//   所有循环改为: for (int i = 0; i < n; ++i)
-//   PRF保持使用: compute_prf(..., i) 以兼容已有数据
-//   数组访问直接使用: TS_F[i], i * BLOCK_SIZE
-//   哈希输入直接使用: std::to_string(i)
-// 
-// - v3.6 (2024): 修复VerifyFileProof中的索引不匹配问题
-//   问题：客户端生成认证标签时使用索引0到n-1，但验证时使用1到n
-//   解决：将验证时的哈希索引改为，与客户端保持一致
-//   修改位置：VerifyFileProof函数第2070行
-// ============================================================================
-
 #include "storage_node.h"
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -93,8 +71,8 @@ bool StorageNode::setup_cryptography(int security_param,
     
     mpz_set_str(p, "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791", 10);
     
-    // mpz_nextprime(q, p);//可以进行替换
-    mpz_set_str(q, "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791", 10);
+    mpz_nextprime(q, p);
+    //mpz_set_str(q, "8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791", 10);
 
 
     // 计算 N = p × q
@@ -104,7 +82,7 @@ bool StorageNode::setup_cryptography(int security_param,
     char* n_str = mpz_get_str(NULL, 10, N);
     std::string n_full(n_str);
     free(n_str);
-    std::cout << "   N = p × q (前50位): " << n_full.substr(0, 50) << "..." << std::endl;
+    std::cout << "   N = p × q  " << n_full << "..." << std::endl;
     std::cout << "   N 总位数: " << n_full.length() << " 位十进制数" << std::endl;
     
     mpz_clear(p);
@@ -137,7 +115,6 @@ bool StorageNode::save_public_params(const std::string& filepath) {
     root["version"] = "2.0";
     root["created_at"] = get_current_timestamp();
     root["description"] = "Public Parameters (N, g, μ) for Decentralized Storage System";
-    root["serialization_method"] = "element_to_bytes";
     
     // 公共参数 PP = {N, g, μ}
     Json::Value public_params;
@@ -211,11 +188,6 @@ bool StorageNode::load_public_params(const std::string& filepath) {
     std::cout << "描述:         " << root["description"].asString() << std::endl;
     
     // 检查序列化方法（兼容旧版本）
-    std::string serialization_method = "element_to_mpz";
-    if (root.isMember("serialization_method")) {
-        serialization_method = root["serialization_method"].asString();
-    }
-    std::cout << "序列化方法:   " << serialization_method << std::endl;
     
     std::cout << "\n[公共参数 PP = {N, g, μ}]" << std::endl;
     
@@ -226,25 +198,19 @@ bool StorageNode::load_public_params(const std::string& filepath) {
     
     // g: G_1的生成元
     std::string g_str = pp["g"].asString();
-    if (serialization_method == "element_to_bytes") {
-        int g_len = pp.isMember("g_length") ? pp["g_length"].asInt() : (g_str.length() / 2);
-        std::cout << "g (字节长度): " << g_len << " bytes" << std::endl;
-        std::cout << "g (hex前40位):" << g_str.substr(0, 40) << "..." << std::endl;
-    } else {
-        std::cout << "g (前40位):   " << g_str.substr(0, 40) << "..." << std::endl;
-        std::cout << "g (总长度):   " << g_str.length() << " 位十进制数" << std::endl;
-    }
+   
+    int g_len = pp.isMember("g_length") ? pp["g_length"].asInt() : (g_str.length() / 2);
+    std::cout << "g (字节长度): " << g_len << " bytes" << std::endl;
+    std::cout << "g (hex前40位):" << g_str.substr(0, 40) << "..." << std::endl;
+ 
     
     // μ: G_1的生成元
     std::string mu_str = pp["mu"].asString();
-    if (serialization_method == "element_to_bytes") {
-        int mu_len = pp.isMember("mu_length") ? pp["mu_length"].asInt() : (mu_str.length() / 2);
-        std::cout << "μ (字节长度): " << mu_len << " bytes" << std::endl;
-        std::cout << "μ (hex前40位):" << mu_str.substr(0, 40) << "..." << std::endl;
-    } else {
-        std::cout << "μ (前40位):   " << mu_str.substr(0, 40) << "..." << std::endl;
-        std::cout << "μ (总长度):   " << mu_str.length() << " 位十进制数" << std::endl;
-    }
+   
+    int mu_len = pp.isMember("mu_length") ? pp["mu_length"].asInt() : (mu_str.length() / 2);
+    std::cout << "μ (字节长度): " << mu_len << " bytes" << std::endl;
+    std::cout << "μ (hex前40位):" << mu_str.substr(0, 40) << "..." << std::endl;
+
     
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     
@@ -371,37 +337,23 @@ bool StorageNode::display_public_params(const std::string& filepath) {
         std::cout << "   创建时间:     " << root["created_at"].asString() << std::endl;
         std::cout << "   描述:         " << root["description"].asString() << std::endl;
         
-        std::string serialization_method = "element_to_mpz";
-        if (root.isMember("serialization_method")) {
-            serialization_method = root["serialization_method"].asString();
-        }
-        std::cout << "   序列化方法:   " << serialization_method << std::endl;
-        
         std::cout << "\n[公共参数 PP = {N, g, μ}]" << std::endl;
         
         std::string n_str = pp["N"].asString();
-        std::cout << "   N (前50位):   " << n_str.substr(0, 50) << "..." << std::endl;
+        std::cout << "   N :   " << n_str << "..." << std::endl;
         std::cout << "   N (总位数):   " << n_str.length() << " 位十进制数" << std::endl;
         
         std::string g_str = pp["g"].asString();
-        if (serialization_method == "element_to_bytes") {
-            int g_len = pp.isMember("g_length") ? pp["g_length"].asInt() : (g_str.length() / 2);
+        
+        int g_len = pp.isMember("g_length") ? pp["g_length"].asInt() : (g_str.length() / 2);
             std::cout << "   g (字节长度): " << g_len << " bytes" << std::endl;
-            std::cout << "   g (hex前40位):" << g_str.substr(0, 40) << "..." << std::endl;
-        } else {
-            std::cout << "   g (前40位):   " << g_str.substr(0, 40) << "..." << std::endl;
-            std::cout << "   g (总长度):   " << g_str.length() << " 位十进制数" << std::endl;
-        }
+            std::cout << "   g (hex前40位):" << g_str << "..." << std::endl;
         
         std::string mu_str = pp["mu"].asString();
-        if (serialization_method == "element_to_bytes") {
-            int mu_len = pp.isMember("mu_length") ? pp["mu_length"].asInt() : (mu_str.length() / 2);
-            std::cout << "   μ (字节长度): " << mu_len << " bytes" << std::endl;
-            std::cout << "   μ (hex前40位):" << mu_str.substr(0, 40) << "..." << std::endl;
-        } else {
-            std::cout << "   μ (前40位):   " << mu_str.substr(0, 40) << "..." << std::endl;
-            std::cout << "   μ (总长度):   " << mu_str.length() << " 位十进制数" << std::endl;
-        }
+        
+        int mu_len = pp.isMember("mu_length") ? pp["mu_length"].asInt() : (mu_str.length() / 2);
+        std::cout << "   μ (字节长度): " << mu_len << " bytes" << std::endl;
+        std::cout << "   μ (hex前40位):" << mu_str << "..." << std::endl;
         
         std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
         std::cout << "💡 提示: 这是只读查看，不会修改系统状态" << std::endl;
@@ -661,7 +613,7 @@ std::vector<unsigned char> StorageNode::hexToBytes(const std::string& hex) {
     std::vector<unsigned char> bytes;
     for (size_t i = 0; i < hex.length(); i += 2) {
         std::string byte_str = hex.substr(i, 2);
-        unsigned char byte = static_cast<unsigned char>(strtol(byte_str.c_str(), nullptr, 16));
+        unsigned char byte = static_cast<unsigned char>(std::stoi(byte_str, nullptr, 16));
         bytes.push_back(byte);
     }
     return bytes;
@@ -689,42 +641,17 @@ std::string StorageNode::serializeElement(element_t elem) {
  * @return 成功返回true，失败返回false
  */
 bool StorageNode::deserializeElement(const std::string& hex_str, element_t elem) {
-    // 错误检查1：hex字符串长度必须是偶数
     if (hex_str.length() % 2 != 0) {
-        std::cerr << "⚠️  deserializeElement: hex字符串长度必须是偶数，当前长度: " 
-                  << hex_str.length() << std::endl;
         return false;
     }
     
-    // 错误检查2：hex字符串不能为空
-    if (hex_str.empty()) {
-        std::cerr << "⚠️  deserializeElement: hex字符串为空" << std::endl;
-        return false;
-    }
-    
-    // 步骤1：将hex转换为bytes
-    std::vector<unsigned char> bytes = hexToBytes(hex_str);
-    if (bytes.empty()) {
-        std::cerr << "⚠️  deserializeElement: hex转换为bytes失败" << std::endl;
-        return false;
-    }
-    
-    // 步骤2：从bytes反序列化为element
+    std::vector<unsigned char> bytes;
+    bytes = hexToBytes(hex_str);
     int bytes_read = element_from_bytes(elem, bytes.data());
     if (bytes_read <= 0) {
-        std::cerr << "⚠️  deserializeElement: element_from_bytes失败，返回值: " 
-                  << bytes_read << std::endl;
         return false;
     }
-    
-    // 错误检查3：验证元素不是单位元（无效元素）
-    if (element_is1(elem)) {
-        std::cerr << "⚠️  deserializeElement: 反序列化后的元素是单位元（无效）" << std::endl;
-        return false;
-    }
-    
-    // 所有检查通过
-    return true;
+    return true;  
 }
 // ==================== 初始化函数 ====================
 

@@ -213,21 +213,16 @@ bool StorageClient::initialize(const std::string& public_params_file) {
     Json::Value public_params;
     
     // 检查参数是否嵌套在 "public_params" 对象中
-    if (params.isMember("public_params") && params["public_params"].isObject()) {
-        std::cout << "[解析] 检测到嵌套的 public_params 对象" << std::endl;
-        public_params = params["public_params"];
+    
+    std::cout << "[解析] 检测到嵌套的 public_params 对象" << std::endl;
+    public_params = params["public_params"];
         
-        // 显示额外的元信息（如果存在）
-        if (params.isMember("version")) {
-            std::cout << "[信息] 参数文件版本: " << params["version"].asString() << std::endl;
-        }
-        if (params.isMember("created_at")) {
-            std::cout << "[信息] 创建时间: " << params["created_at"].asString() << std::endl;
-        }
-    } else {
-        // 向后兼容：直接从根对象读取
-        std::cout << "[解析] 使用根级参数（旧格式）" << std::endl;
-        public_params = params;
+    // 显示额外的元信息（如果存在）
+    if (params.isMember("version")) {
+        std::cout << "[信息] 参数文件版本: " << params["version"].asString() << std::endl;
+    }
+    if (params.isMember("created_at")) {
+        std::cout << "[信息] 创建时间: " << params["created_at"].asString() << std::endl;
     }
     
     // ========================================
@@ -1324,19 +1319,14 @@ bool StorageClient::deserializeElement(const std::string& hex_str, element_t ele
     }
     
     std::vector<unsigned char> bytes;
-    for (size_t i = 0; i < hex_str.length(); i += 2) {
-        std::string byte_str = hex_str.substr(i, 2);
-        unsigned char byte = static_cast<unsigned char>(std::stoi(byte_str, nullptr, 16));
-        bytes.push_back(byte);
-    }
-    
+    bytes = hexToBytes(hex_str);
     int bytes_read = element_from_bytes(elem, bytes.data());
     if (bytes_read <= 0) {
         return false;
     }
-    
     return true;
 }
+
 
 std::string StorageClient::bytesToHex(const std::vector<unsigned char>& bytes) {
     std::ostringstream oss;
@@ -1345,6 +1335,16 @@ std::string StorageClient::bytesToHex(const std::vector<unsigned char>& bytes) {
             << static_cast<int>(byte);
     }
     return oss.str();
+}
+
+std::vector<unsigned char> StorageClient::hexToBytes(const std::string& hex_str) {
+    std::vector<unsigned char> bytes;
+    for (size_t i = 0; i < hex_str.length(); i += 2) {
+        std::string byte_str = hex_str.substr(i, 2);
+        unsigned char byte = static_cast<unsigned char>(std::stoi(byte_str, nullptr, 16));
+        bytes.push_back(byte);
+    }
+    return bytes;
 }
 
 std::string StorageClient::getCurrentTimestamp() {
