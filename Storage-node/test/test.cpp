@@ -6,32 +6,99 @@
 #include <openssl/sha.h>
 
 
+struct testFileProof {
+    mpz_t psi;   // ψ值（累积证明）
+    element_t phi;   // φ值（累积签名）
+    std::string seed; // 客户端公钥
+    std::string ID_F; // 文件ID
+    std::string pk;   // 公钥
+};
 
-void testVerifyFileProof();
-void testGetFileProof();
+
+void testVerifyFileProof_str();
+void testVerifyFileProof_struct(testFileProof file_proof);
+void testGetFileProof(std::string file_id, testFileProof& file_proof);
 void computeHashH2(const std::string& input, element_t result);
 void compute_prf(mpz_t result, const std::string& seed, const std::string& ID_F, int index, mpz_t N);
 void computeHashH1(const std::string& input, mpz_t result, mpz_t N);
 bool deserializeElement(const std::string& hex_str, element_t elem);
 std::vector<unsigned char> hexToBytes(const std::string& hex);
 std::string bytesToHex(const unsigned char* data, size_t len);
+bool load_index_database();
 
 int main()
 {
-    testGetFileProof();
-    testVerifyFileProof();
+    testFileProof file_proof;
+    file_proof.phi = nullptr;
+    file_proof.psi = nullptr;
+    file_proof.seed = "";
+    std::string file_id = "";
+    file_proof.ID_F = file_id;
+    file_proof.pk = "9d098b372d6c8944b1c6119500b57ae1d06951a6c7563140ced8d66e59a50269cd5be7d2f25bcd289dfbfcbad4254fb9d62f21e6b436391e186aead8227fa63ba3be5cea8873f186c647c01d1918caca9c6769d9d33acbba09ac9da048b46e86cf728a8c9593be309e106b4d08b11b85b1d22ba12585606e195350fa264450d1";
+
+    testGetFileProof(file_id, file_proof);
+    testVerifyFileProof_struct();
     return 0;
 }
-void testGetFileProof()
+void testGetFileProof(std::string file_id, testFileProof& file_proof)
 {
+    const char* param_str = 
+        "type a\n"
+        "q 8780710799663312522437781984754049815806883199414208211028653399266475630880222957078625179422662221423155858769582317459277713367317481324925129998224791\n"
+        "h 12016012264891146079388821366740534204802954401251311822919615131047207289359704531102844802183906537786776\n"
+        "r 730750818665451621361119245571504901405976559617\n"
+        "exp2 159\n"
+        "exp1 107\n"
+        "sign1 1\n"
+        "sign0 1\n";
+
+    pairing_t pairing;
+    pairing_init_set_buf(pairing, param_str, strlen(param_str));
+
+    std::cout << "✅ pairing 初始化成功" << std::endl;
+  
     std::cout << "GetFileProof start" << std::endl;
+    // 首先加载数据库
+    if (!load_index_database()) {
+        std::cerr << "❌ 加载索引数据库失败，无法进行GetFileProof测试" << std::endl;
+        return;
+    }
+    // 自己实现GetFileProof函数的测试逻辑
+    auto it = index_database.find(file_id);
+    if (it == index_database.end()) {
+        std::cerr << "❌ 文件不存在: " << file_id << std::endl;
+        return;
+    }
+    const IndexEntry& entry = it->second;
+    std::cout << "   ✅ 找到文件" << std::endl;
+
+    const std::vector<std::string>& TS_F = entry.TS_F;
+    int n = TS_F.size();  // 块数量
+    std::string PK = entry.PK;
+
+    std::string ciphertext;
+    load_encrypted_file(file_id, ciphertext);
+
+    // seed定义为固定值以便测试，与自动生成的seed相同
+    std::string seed = "fb11610a83e1eab28714cb7363f4764f82b022f0c70d89c42b8d68a5f9f5c344";
+    file_proof.seed = seed;
+
+    file_proof.pk = PK;
+    file_proof.ID_F = file_id;
+
+    // 开始计算证明proof
+    element_t phi;
+    mpz_t psi;
+    element_init_G1(phi, pairing);
+    element_set1(phi);
+    mpz_init_set_ui(psi, 0);
 
     
     std::cout << "GetFileProof end" << std::endl;
 }
 
 
-void testVerifyFileProof()
+void testVerifyFileProof_str()
 {
     const char* param_str = 
         "type a\n"
@@ -212,4 +279,75 @@ std::string bytesToHex(const unsigned char* data, size_t len) {
         ss << std::setw(2) << static_cast<int>(data[i]);
     }
     return ss.str();
+}
+
+bool load_index_database() {
+    std::string index_path = data_dir + "/index_db.json";
+    
+    if (!file_exists(index_path)) {
+        std::cout << "⚠️  索引数据库不存在,将创建新数据库" << std::endl;
+        return save_index_database();
+    }
+    
+    Json::Value root = load_json_from_file(index_path);
+    
+    if (root.isMember("database") && root["database"].isArray()) {
+        index_database.clear();
+        
+        for (const auto& entry_json : root["database"]) {
+            IndexEntry entry;
+            entry.ID_F = entry_json["ID_F"].asString();
+            entry.PK = entry_json["PK"].asString();
+            entry.state = entry_json["state"].asString();
+            entry.file_path = entry_json.get("file_path", "").asString();
+            
+            if (entry_json.isMember("TS_F") && entry_json["TS_F"].isArray()) {
+                for (const auto& ts : entry_json["TS_F"]) {
+                    entry.TS_F.push_back(ts.asString());
+                }
+            }
+            
+            if (entry_json.isMember("keywords") && entry_json["keywords"].isArray()) {
+                for (const auto& kw_json : entry_json["keywords"]) {
+                    IndexKeywords kw;
+                    kw.ptr_i = kw_json.get("ptr_i", "").asString();
+                    kw.kt_wi = kw_json.get("kt_wi", "").asString();
+                    kw.Ti_bar = kw_json.get("Ti_bar", "").asString();
+                    entry.keywords.push_back(kw);
+                }
+            }
+            
+            index_database[entry.ID_F] = entry;
+        }
+        
+        std::cout << "✅ 索引数据库加载成功 (新格式，共 " << index_database.size() << " 个文件)" << std::endl;
+        
+    } else {
+        std::cerr << "❌ 索引数据库格式错误" << std::endl;
+        return false;
+    }
+    
+    return true;
+}
+bool load_encrypted_file(const std::string& file_id, std::string& ciphertext) {
+    std::string file_path = files_dir + "/" + file_id + ".enc";
+    
+    if (!file_exists(file_path)) {
+        return false;
+    }
+    std::ifstream file(filepath, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "❌ 无法读取文件: " << filepath << std::endl;
+        return "";
+    }
+    
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    file.close();
+    ciphertext = buffer.str();
+    return !ciphertext.empty();
+}
+void testVerifyFileProof_struct(testFileProof file_proof)
+{
+    return 0;
 }
