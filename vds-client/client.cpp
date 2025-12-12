@@ -931,7 +931,7 @@ bool StorageClient::generateKeywordAssociatedTag(const std::string& file_id,
     
     element_mul(kt, kt, h2_current);
     
-    if (!previous_state.empty()) {
+    if (previous_state != current_state) {
         // 有前一状态: 除以 H_2(st_{d-1}||Ti)
         element_t h2_previous;
         element_init_G1(h2_previous, pairing_);

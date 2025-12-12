@@ -1360,22 +1360,23 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
         std::string st_alpha_hash = computeHashH3(st_alpha);
         st_alpha_next = decrypt_pointer(st_alpha_hash, search_entry.ptr_i);
         
-        // 添加ID_F到AS
-        AS.push_back(ID_F);
-        
-        // 新增：操作1 - 计算 phi *= kt_wi
-        element_t kt_wi_elem;
-        element_init_G1(kt_wi_elem, pairing);
-        
-        std::vector<unsigned char> kt_wi_bytes = hexToBytes(search_entry.kt_wi);
-        element_from_bytes(kt_wi_elem, kt_wi_bytes.data());
-        
-        element_mul(global_phi, global_phi, kt_wi_elem);
-        element_clear(kt_wi_elem);
         
         // --- 操作2: 计算证明（仅当state为valid时） ---
         
         if (search_entry.state == "valid") {
+            // 记录文件ID，有效文件ID集合
+            AS.push_back(ID_F);
+            
+            // 更新全局phi变量
+            element_t kt_wi_elem;
+            element_init_G1(kt_wi_elem, pairing);
+        
+            std::vector<unsigned char> kt_wi_bytes = hexToBytes(search_entry.kt_wi);
+            element_from_bytes(kt_wi_elem, kt_wi_bytes.data());
+        
+            element_mul(global_phi, global_phi, kt_wi_elem);
+            element_clear(kt_wi_elem);
+            
             std::cout << "   生成证明..." << std::endl;
             
             SearchResult temp_result;
@@ -1835,8 +1836,6 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
     int n;  // 块数量
     std::string PK = it->second.PK;   // 公钥
     
-    std::cout << "   块数量 n: " << n << std::endl;
-    
     // ========== 步骤4：初始化变量 ==========
     
     // 初始化变量：zeta_1, zeta_2, zeta_3, pho
@@ -1881,7 +1880,9 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
             std::cerr << "⚠️  文件不存在: " << ID_F << std::endl;
             continue;
         }
+        // 每个文件都进行更新n,即文件的块数，每个文件可能不同
         n = it->second.TS_F.size();  // 块数量（确保使用正确的n）
+        std::cout << "   块数量 n: " << n << std::endl;
         std::cout << "   [" << (t+1) << "/" << file_nums << "] 处理文件: " 
                   << ID_F.substr(0, 16) << "..." << std::endl;
         
