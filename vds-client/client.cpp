@@ -927,7 +927,7 @@ bool StorageClient::generateKeywordAssociatedTag(const std::string& file_id,
     // 计算 H_2(st_d||Ti)
     element_t h2_current;
     element_init_G1(h2_current, pairing_);
-    computeHashH2(current_state + Ti, h2_current);
+    computeHashH2(Ti + current_state, h2_current);
     
     element_mul(kt, kt, h2_current);
     
@@ -935,7 +935,7 @@ bool StorageClient::generateKeywordAssociatedTag(const std::string& file_id,
         // 有前一状态: 除以 H_2(st_{d-1}||Ti)
         element_t h2_previous;
         element_init_G1(h2_previous, pairing_);
-        computeHashH2(previous_state + Ti, h2_previous);
+        computeHashH2(Ti + previous_state, h2_previous);
         
         // 计算逆元
         element_t h2_prev_inv;

@@ -15,7 +15,7 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
-#include <jsoncpp/json/json.h>
+#include <json/json.h>
 
 struct IndexKeywords
 {
@@ -51,12 +51,11 @@ struct SearchResult {
 };
 
 // 文件证明结构体
-
-
 struct FileProof {
     std::string psi;   // ψ值（累积证明）
     std::string phi;   // φ值（累积签名）
 };
+
 class StorageNode {
 public:
     // 文件分块常量
@@ -68,7 +67,8 @@ public:
     pairing_t pairing;
     element_t g;
     element_t mu;
-    mpz_t N;
+    mpz_t N;          // 保留用于文件ID（可选）
+    mpz_t r;          // ✅ 新增：群阶（椭圆曲线点群的阶）
     bool crypto_initialized;
     
     // 存储（统一使用IndexEntry，以ID_F为键）
@@ -108,7 +108,6 @@ public:
     */
     bool verify_pk_format(const std::string& pk);
 
-// public
     StorageNode(const std::string& data_directory = "../data", int port = 9000);
     ~StorageNode();
     
@@ -196,7 +195,6 @@ public:
     std::string bytesToHex(const unsigned char* data, size_t len);
     std::vector<unsigned char> hexToBytes(const std::string& hex);
     
-
     // ========== Getters ==========
     
     std::string get_node_id() const {
@@ -244,20 +242,33 @@ public:
         std::cout << "端口:         " << server_port << std::endl;
         std::cout << "文件数:       " << get_index_count() << std::endl;
         std::cout << "密码学:       " << (crypto_initialized ? "已初始化" : "未初始化") << std::endl;
-        std::cout << "版本:         v3.8 (统一序列化函数+错误检查)" << std::endl;
+        std::cout << "版本:         v4.0 (模r统一+所有bug修复)" << std::endl;
         std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     }
     
     void print_detailed_status();
 
-    // 密码学函数（修改为void返回值）
+    // ========== 密码学函数 ==========
+    
+    // ✅ 修改：computeHashH1 保留用于文件ID（可选，也可改用SHA256）
     void computeHashH1(const std::string& input, mpz_t result);
+    
+    // ✅ 新增：hashToScalar - 将字符串哈希到Zᵣ中（用于PRF等）
+    void hashToScalar(const std::string& input, mpz_t result);
+    
+    // computeHashH2 保持不变（哈希到G1）
     void computeHashH2(const std::string& input, element_t result);
+    
+    // computeHashH3 保持不变（用于指针加密）
     std::string computeHashH3(const std::string& input);
+    
+    // ✅ 修改：compute_prf 现在使用 hashToScalar（输出在Zᵣ中）
     void compute_prf(mpz_t result, const std::string& seed, const std::string& ID_F, int index);
+    
+    // decrypt_pointer 保持不变
     std::string decrypt_pointer(const std::string& current_state_hash, const std::string& encrypted_pointer);
     
-    // 序列化辅助函数（与client.cpp统一，方案A核心修改）
+    // 序列化辅助函数（与client.cpp统一）
     std::string serializeElement(element_t elem);
     bool deserializeElement(const std::string& hex_str, element_t elem);
 };

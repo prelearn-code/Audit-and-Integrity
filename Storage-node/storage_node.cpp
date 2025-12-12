@@ -28,6 +28,7 @@ StorageNode::~StorageNode() {
         element_clear(g);
         element_clear(mu);
         mpz_clear(N);
+        mpz_clear(r);  // ✅ 新增：清理群阶r
         pairing_clear(pairing);
     }
 }
@@ -59,6 +60,11 @@ bool StorageNode::setup_cryptography(int security_param,
     element_init_G1(g, pairing);
     element_init_G1(mu, pairing);
     mpz_init(N);
+    mpz_init(r);  // ✅ 新增：初始化群阶r
+    
+    // ✅ 设置群阶r（从pairing参数中提取）
+    mpz_set_str(r, "730750818665451621361119245571504901405976559617", 10);
+    std::cout << "   群阶 r: 730750818665451621361119245571504901405976559617" << std::endl;
     
     // 设置随机生成器
     element_random(g);
@@ -237,6 +243,10 @@ bool StorageNode::load_public_params(const std::string& filepath) {
     element_init_G1(g, pairing);
     element_init_G1(mu, pairing);
     mpz_init(N);
+    mpz_init(r);  // ✅ 新增：初始化r
+    
+    // ✅ 设置群阶r（从pairing参数中提取）
+    mpz_set_str(r, "730750818665451621361119245571504901405976559617", 10);
     
     // ============ 步骤3: 加载参数到内存 ============
     
@@ -246,10 +256,12 @@ bool StorageNode::load_public_params(const std::string& filepath) {
         element_clear(g);
         element_clear(mu);
         mpz_clear(N);
+        mpz_clear(r);  // ✅ 新增：清理r
         pairing_clear(pairing);
         return false;
     }
     std::cout << "   ✅ 加载 N (" << n_str.length() << " 位十进制数)" << std::endl;
+    std::cout << "   ✅ 加载群阶 r (160位)" << std::endl;
     
     // 加载 g - 根据序列化方法选择不同的加载方式
     // g的类型是element_t
@@ -260,6 +272,7 @@ bool StorageNode::load_public_params(const std::string& filepath) {
         element_clear(g);
         element_clear(mu);
         mpz_clear(N);
+        mpz_clear(r);  // ✅ 新增
         pairing_clear(pairing);
         return false;
     }
@@ -270,6 +283,7 @@ bool StorageNode::load_public_params(const std::string& filepath) {
         element_clear(g);
         element_clear(mu);
         mpz_clear(N);
+        mpz_clear(r);  // ✅ 新增
         pairing_clear(pairing);
         return false;
     }
@@ -282,6 +296,7 @@ bool StorageNode::load_public_params(const std::string& filepath) {
         element_clear(g);
         element_clear(mu);
         mpz_clear(N);
+        mpz_clear(r);  // ✅ 新增
         pairing_clear(pairing);
         return false;
     }
@@ -292,6 +307,7 @@ bool StorageNode::load_public_params(const std::string& filepath) {
         element_clear(g);
         element_clear(mu);
         mpz_clear(N);
+        mpz_clear(r);  // ✅ 新增
         pairing_clear(pairing);
         return false;
     }
@@ -403,6 +419,16 @@ void StorageNode::computeHashH1(const std::string& input, mpz_t result) {
     mpz_mod(result, result, N);
 }
 
+// ✅ 新增：hashToScalar - 将字符串哈希到Zᵣ中（用于所有标量运算）
+void StorageNode::hashToScalar(const std::string& input, mpz_t result) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256(reinterpret_cast<const unsigned char*>(input.c_str()),
+           input.length(), hash);
+    
+    mpz_import(result, SHA256_DIGEST_LENGTH, 1, 1, 0, 0, hash);
+    mpz_mod(result, result, r);  // ✅ 关键：模r而不是模N
+}
+
 void StorageNode::computeHashH2(const std::string& input, element_t result) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256(reinterpret_cast<const unsigned char*>(input.c_str()),
@@ -424,13 +450,13 @@ std::string StorageNode::computeHashH3(const std::string& input) {
     return oss.str();
 }
 
-// 修改后的compute_prf函数
+// ✅ 修改后的compute_prf函数 - 现在使用hashToScalar（输出在Zᵣ中）
 void StorageNode::compute_prf(mpz_t result, const std::string& seed, const std::string& ID_F, int index) {
     // 组合输入：seed + ID_F + index
     std::string combined = seed + ID_F + std::to_string(index);
     
-    // 使用computeHashH1计算哈希并直接设置到result
-    computeHashH1(combined, result);
+    // ✅ 使用hashToScalar计算哈希（自动模r）
+    hashToScalar(combined, result);
 }
 
 std::string StorageNode::decrypt_pointer(const std::string& current_state_hash, const std::string& encrypted_pointer) {
@@ -1292,7 +1318,7 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
         
         element_t Ti_bar_elem;
         element_init_G1(Ti_bar_elem, pairing);
-        computeHashH2(T + st_alpha, Ti_bar_elem);
+        computeHashH2(T + st_alpha , Ti_bar_elem);
         
         // 将element转换为hex字符串
         int Ti_bar_len = element_length_in_bytes(Ti_bar_elem);
@@ -1342,8 +1368,9 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
         element_init_G1(kt_wi_elem, pairing);
         
         std::vector<unsigned char> kt_wi_bytes = hexToBytes(search_entry.kt_wi);
-        element_mul(global_phi, global_phi, kt_wi_elem);
+        element_from_bytes(kt_wi_elem, kt_wi_bytes.data());
         
+        element_mul(global_phi, global_phi, kt_wi_elem);
         element_clear(kt_wi_elem);
         
         // --- 操作2: 计算证明（仅当state为valid时） ---
@@ -1370,7 +1397,7 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
             
             // 使用在步骤3中生成的search_seed
             std::string seed = search_seed;
-            std::cout << "   使用种子: " << seed.substr(0, 16) << "..." << std::endl;
+            std::cout << "   使用种子: " << seed << "..." << std::endl;
             
             // 初始化累积变量
             mpz_t psi_alpha;
@@ -1390,16 +1417,25 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
                 // 获取第i块的数据
                 size_t block_start = i * BLOCK_SIZE;
                 size_t block_end = std::min(block_start + BLOCK_SIZE, ciphertext.size());
-                
+                std::vector<unsigned char> current_block;
+                if (block_end > block_start) {
+                    current_block.assign(
+                    ciphertext.begin() + block_start,
+                    ciphertext.begin() + block_end
+                    );
+                if (current_block.size() < BLOCK_SIZE) {
+                    current_block.resize(BLOCK_SIZE, 0);
+                    }
+                }
                 // 遍历该块的每个扇区
-                for (size_t j = 0; j < SECTORS_PER_BLOCK && (block_start + j * SECTOR_SIZE) < block_end; j++) {
-                    size_t sector_start = block_start + j * SECTOR_SIZE;
-                    size_t sector_end = std::min(sector_start + SECTOR_SIZE, block_end);
+                for (size_t j = 0; j < SECTORS_PER_BLOCK; j++) {
+                    size_t sector_start = j * SECTOR_SIZE;
+                    size_t sector_end = sector_start + SECTOR_SIZE;
                     
                     // 提取扇区数据
                     std::vector<unsigned char> sector_data(
-                        ciphertext.begin() + sector_start,
-                        ciphertext.begin() + sector_end
+                        current_block.begin() + sector_start,
+                        current_block.begin() + sector_end
                     );
                     
                     // 将扇区数据转换为mpz_t
@@ -1411,10 +1447,11 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
                     mpz_t product;
                     mpz_init(product);
                     mpz_mul(product, prf_temp, C_ij);
-                    
-                    // 累积：psi_alpha += product  // ✅ 修改：使用加法
+                    mpz_mod(product, product, r);  // 防止溢出
+                
+                    // ✅ 修改：累积并模r（而不是模N）
                     mpz_add(psi_alpha, psi_alpha, product);
-                    mpz_mod(psi_alpha, psi_alpha, N);
+                    mpz_mod(psi_alpha, psi_alpha, r);  // ✅ 关键修改：使用r
                     
                     mpz_clear(C_ij);
                     mpz_clear(product);
@@ -1537,6 +1574,7 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
     return true;
 }
 
+// 生成文件证明
 bool StorageNode::GetFileProof(const std::string& ID_F) {
     std::cout << "\n📄 生成文件证明..." << std::endl;
     std::cout << "   文件ID: " << ID_F << std::endl;
@@ -1620,15 +1658,25 @@ bool StorageNode::GetFileProof(const std::string& ID_F) {
         // 步骤6.2：处理该块的所有扇区
         size_t block_start = i * BLOCK_SIZE;
         size_t block_end = std::min(block_start + BLOCK_SIZE, ciphertext.size());
-        
-        for (size_t j = 0; j < SECTORS_PER_BLOCK && (block_start + j * SECTOR_SIZE) < block_end; j++) {
-            size_t sector_start = block_start + j * SECTOR_SIZE;
-            size_t sector_end = std::min(sector_start + SECTOR_SIZE, block_end);
+        std::vector<unsigned char> current_block;
+        if (block_end > block_start) {
+            current_block.assign(
+                ciphertext.begin() + block_start,
+                ciphertext.begin() + block_end
+            );
+            if (current_block.size() < BLOCK_SIZE) {
+                current_block.resize(BLOCK_SIZE, 0);
+            }
+        }
+
+        for (size_t j = 0; j < SECTORS_PER_BLOCK; j++) {
+            size_t sector_start = j * SECTOR_SIZE;
+            size_t sector_end = sector_start + SECTOR_SIZE;
             
             // 提取扇区数据 c_(i,j)
             std::vector<unsigned char> sector_data(
-                ciphertext.begin() + sector_start,
-                ciphertext.begin() + sector_end
+                current_block.begin() + sector_start,
+                current_block.begin() + sector_end
             );
             
             // 将扇区数据转换为mpz_t
@@ -1641,9 +1689,10 @@ bool StorageNode::GetFileProof(const std::string& ID_F) {
             mpz_init(product);
             mpz_mul(product, prf_result, C_ij);
             
-            // 累加：psi += product
+            // ✅ 修改：累加并模r（而不是模N）
             mpz_add(psi_mpz, psi_mpz, product);
-            mpz_mod(psi_mpz, psi_mpz, N);
+            // 换了模操作
+            mpz_mod(psi_mpz, psi_mpz, r);  // ✅ 关键修改：使用r模
             
             mpz_clear(C_ij);
             mpz_clear(product);
@@ -1775,7 +1824,7 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
         std::cerr << "❌ AS数组为空" << std::endl;
         return false;
     }
-    
+
     std::string first_ID_F = AS[0].asString();
     auto it = index_database.find(first_ID_F);
     if (it == index_database.end()) {
@@ -1783,7 +1832,7 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
         return false;
     }
     
-    int n = it->second.TS_F.size();  // 块数量
+    int n;  // 块数量
     std::string PK = it->second.PK;   // 公钥
     
     std::cout << "   块数量 n: " << n << std::endl;
@@ -1827,7 +1876,12 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
         std::string ID_F = ps_item["ID_F"].asString();
         std::string phi_alpha = ps_item["phi_alpha"].asString();
         std::string psi_alpha = ps_item["psi_alpha"].asString();
-        
+        it = index_database.find(ID_F);
+        if (it == index_database.end()) {
+            std::cerr << "⚠️  文件不存在: " << ID_F << std::endl;
+            continue;
+        }
+        n = it->second.TS_F.size();  // 块数量（确保使用正确的n）
         std::cout << "   [" << (t+1) << "/" << file_nums << "] 处理文件: " 
                   << ID_F.substr(0, 16) << "..." << std::endl;
         
@@ -1855,13 +1909,13 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
         mpz_init(psi_alpha_mpz);
         if (mpz_set_str(psi_alpha_mpz, psi_alpha.c_str(), 16) == 0) {
             mpz_add(pho, pho, psi_alpha_mpz);
-            mpz_mod(pho, pho, N);
+            mpz_mod(pho, pho, r);  // ✅ 关键修改：使用r
         }
         mpz_clear(psi_alpha_mpz);
         
         // 步骤5.5：内循环 - 遍历所有块（统一改为从0开始）
         for (int i = 0; i < n; ++i) {
-            // 计算 prf_temp（保持PRF使用1-based索引以兼容已有数据）
+
             mpz_t prf_temp;
             mpz_init(prf_temp);
             compute_prf(prf_temp, seed, ID_F, i);
@@ -1895,10 +1949,10 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
     element_init_GT(left_pairing, pairing);
     pairing_apply(left_pairing, zeta_3, g, pairing);
     
-    // 步骤6.2：计算 Ti_bar_temp = H2(std || T)
+    // 步骤6.2：计算 Ti_bar_temp = H2(T||std)
     element_t Ti_bar_temp;
     element_init_G1(Ti_bar_temp, pairing);
-    computeHashH2(std_input + T, Ti_bar_temp);
+    computeHashH2(T + std_input, Ti_bar_temp);
     
     // 步骤6.3：计算 mu^pho
     element_t mu_pow_pho;
@@ -2005,7 +2059,7 @@ bool StorageNode::VerifyFileProof(const std::string& file_proof_json_path) {
     std::string phi = fileproof_json["phi"].asString();
     
     std::cout << "   文件ID: " << ID_F << std::endl;
-    std::cout << "   种子: " << seed.substr(0, 16) << "..." << std::endl;
+    std::cout << "   种子: " << seed << std::endl;
     
     // ========== 步骤3：加载索引数据库并获取参数 ==========
     
@@ -2021,7 +2075,7 @@ bool StorageNode::VerifyFileProof(const std::string& file_proof_json_path) {
         std::cerr << "❌ 文件不存在: " << ID_F << std::endl;
         return false;
     }
-    
+    // 4块
     int n = it->second.TS_F.size();  // 块数量
     std::string PK = it->second.PK;   // 公钥
     
@@ -2038,7 +2092,7 @@ bool StorageNode::VerifyFileProof(const std::string& file_proof_json_path) {
     
     // 循环计算zeta（统一改为从0开始）
     for (int i = 0; i < n; ++i) {
-        // 计算prf_temp（保持PRF使用1-based索引以兼容已有数据）
+        // 计算prf_temp
         mpz_t prf_temp;
         mpz_init(prf_temp);
         compute_prf(prf_temp, seed, ID_F, i);

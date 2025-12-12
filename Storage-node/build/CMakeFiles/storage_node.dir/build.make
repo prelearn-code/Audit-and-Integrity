@@ -73,29 +73,29 @@ CMakeFiles/storage_node.dir/main.cpp.o: CMakeFiles/storage_node.dir/flags.make
 CMakeFiles/storage_node.dir/main.cpp.o: ../main.cpp
 CMakeFiles/storage_node.dir/main.cpp.o: CMakeFiles/storage_node.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/zsw/codes/Audit-and-Integrity/Storage-node/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/storage_node.dir/main.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_node.dir/main.cpp.o -MF CMakeFiles/storage_node.dir/main.cpp.o.d -o CMakeFiles/storage_node.dir/main.cpp.o -c /home/zsw/codes/Audit-and-Integrity/Storage-node/main.cpp
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_node.dir/main.cpp.o -MF CMakeFiles/storage_node.dir/main.cpp.o.d -o CMakeFiles/storage_node.dir/main.cpp.o -c /home/zsw/codes/Audit-and-Integrity/Storage-node/main.cpp
 
 CMakeFiles/storage_node.dir/main.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/storage_node.dir/main.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit-and-Integrity/Storage-node/main.cpp > CMakeFiles/storage_node.dir/main.cpp.i
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit-and-Integrity/Storage-node/main.cpp > CMakeFiles/storage_node.dir/main.cpp.i
 
 CMakeFiles/storage_node.dir/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/storage_node.dir/main.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit-and-Integrity/Storage-node/main.cpp -o CMakeFiles/storage_node.dir/main.cpp.s
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit-and-Integrity/Storage-node/main.cpp -o CMakeFiles/storage_node.dir/main.cpp.s
 
 CMakeFiles/storage_node.dir/storage_node.cpp.o: CMakeFiles/storage_node.dir/flags.make
 CMakeFiles/storage_node.dir/storage_node.cpp.o: ../storage_node.cpp
 CMakeFiles/storage_node.dir/storage_node.cpp.o: CMakeFiles/storage_node.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/zsw/codes/Audit-and-Integrity/Storage-node/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/storage_node.dir/storage_node.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_node.dir/storage_node.cpp.o -MF CMakeFiles/storage_node.dir/storage_node.cpp.o.d -o CMakeFiles/storage_node.dir/storage_node.cpp.o -c /home/zsw/codes/Audit-and-Integrity/Storage-node/storage_node.cpp
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_node.dir/storage_node.cpp.o -MF CMakeFiles/storage_node.dir/storage_node.cpp.o.d -o CMakeFiles/storage_node.dir/storage_node.cpp.o -c /home/zsw/codes/Audit-and-Integrity/Storage-node/storage_node.cpp
 
 CMakeFiles/storage_node.dir/storage_node.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/storage_node.dir/storage_node.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit-and-Integrity/Storage-node/storage_node.cpp > CMakeFiles/storage_node.dir/storage_node.cpp.i
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit-and-Integrity/Storage-node/storage_node.cpp > CMakeFiles/storage_node.dir/storage_node.cpp.i
 
 CMakeFiles/storage_node.dir/storage_node.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/storage_node.dir/storage_node.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit-and-Integrity/Storage-node/storage_node.cpp -o CMakeFiles/storage_node.dir/storage_node.cpp.s
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit-and-Integrity/Storage-node/storage_node.cpp -o CMakeFiles/storage_node.dir/storage_node.cpp.s
 
 # Object files for target storage_node
 storage_node_OBJECTS = \

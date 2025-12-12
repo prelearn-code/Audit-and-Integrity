@@ -73,29 +73,29 @@ CMakeFiles/storage_client.dir/main.cpp.o: CMakeFiles/storage_client.dir/flags.ma
 CMakeFiles/storage_client.dir/main.cpp.o: ../main.cpp
 CMakeFiles/storage_client.dir/main.cpp.o: CMakeFiles/storage_client.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/zsw/codes/Audit-and-Integrity/vds-client/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/storage_client.dir/main.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_client.dir/main.cpp.o -MF CMakeFiles/storage_client.dir/main.cpp.o.d -o CMakeFiles/storage_client.dir/main.cpp.o -c /home/zsw/codes/Audit-and-Integrity/vds-client/main.cpp
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_client.dir/main.cpp.o -MF CMakeFiles/storage_client.dir/main.cpp.o.d -o CMakeFiles/storage_client.dir/main.cpp.o -c /home/zsw/codes/Audit-and-Integrity/vds-client/main.cpp
 
 CMakeFiles/storage_client.dir/main.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/storage_client.dir/main.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit-and-Integrity/vds-client/main.cpp > CMakeFiles/storage_client.dir/main.cpp.i
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit-and-Integrity/vds-client/main.cpp > CMakeFiles/storage_client.dir/main.cpp.i
 
 CMakeFiles/storage_client.dir/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/storage_client.dir/main.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit-and-Integrity/vds-client/main.cpp -o CMakeFiles/storage_client.dir/main.cpp.s
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit-and-Integrity/vds-client/main.cpp -o CMakeFiles/storage_client.dir/main.cpp.s
 
 CMakeFiles/storage_client.dir/client.cpp.o: CMakeFiles/storage_client.dir/flags.make
 CMakeFiles/storage_client.dir/client.cpp.o: ../client.cpp
 CMakeFiles/storage_client.dir/client.cpp.o: CMakeFiles/storage_client.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/zsw/codes/Audit-and-Integrity/vds-client/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/storage_client.dir/client.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_client.dir/client.cpp.o -MF CMakeFiles/storage_client.dir/client.cpp.o.d -o CMakeFiles/storage_client.dir/client.cpp.o -c /home/zsw/codes/Audit-and-Integrity/vds-client/client.cpp
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_client.dir/client.cpp.o -MF CMakeFiles/storage_client.dir/client.cpp.o.d -o CMakeFiles/storage_client.dir/client.cpp.o -c /home/zsw/codes/Audit-and-Integrity/vds-client/client.cpp
 
 CMakeFiles/storage_client.dir/client.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/storage_client.dir/client.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit-and-Integrity/vds-client/client.cpp > CMakeFiles/storage_client.dir/client.cpp.i
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit-and-Integrity/vds-client/client.cpp > CMakeFiles/storage_client.dir/client.cpp.i
 
 CMakeFiles/storage_client.dir/client.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/storage_client.dir/client.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit-and-Integrity/vds-client/client.cpp -o CMakeFiles/storage_client.dir/client.cpp.s
+	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit-and-Integrity/vds-client/client.cpp -o CMakeFiles/storage_client.dir/client.cpp.s
 
 # Object files for target storage_client
 storage_client_OBJECTS = \
