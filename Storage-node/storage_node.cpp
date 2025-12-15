@@ -1075,12 +1075,6 @@ bool StorageNode::insert_file(const std::string& param_json_path, const std::str
     return true;
 }
 
-bool StorageNode::delete_file(const std::string& PK, const std::string& file_id, const std::string& del_proof) {
-    std::cout << "\n🗑️  删除文件功能待实现" << std::endl;
-    std::cout << "   文件ID: " << file_id << std::endl;
-    std::cout << "   请求者PK: " << PK.substr(0, 16) << "..." << std::endl;
-    return false;
-}
 
 // ==================== 新增功能实现 ====================
 
@@ -1191,6 +1185,11 @@ bool StorageNode::delete_file_from_json(const std::string& delete_json_path) {
     entry.state = "invalid";
     std::cout << "   ✅ 文件状态已设置为 invalid" << std::endl;
     
+    // 步骤7.5: 清空认证标签（方案A：防止已删除文件被误验证）
+    int original_ts_f_count = entry.TS_F.size();
+    entry.TS_F.clear();
+    std::cout << "   ✅ 已清空认证标签 (原有 " << original_ts_f_count << " 个标签)" << std::endl;
+    
     // 步骤8: 更新搜索数据库
     std::cout << "   更新搜索数据库..." << std::endl;
     for (const std::string& Ti_bar : Ti_bars) {
@@ -1238,6 +1237,7 @@ bool StorageNode::delete_file_from_json(const std::string& delete_json_path) {
     std::cout << "✅ 文件删除成功" << std::endl;
     std::cout << "   文件ID: " << ID_F << std::endl;
     std::cout << "   更新的Ti_bar数量: " << Ti_bars.size() << std::endl;
+    std::cout << "   清空的认证标签数量: " << original_ts_f_count << std::endl;
     
     return true;
 }
@@ -1606,6 +1606,18 @@ bool StorageNode::GetFileProof(const std::string& ID_F) {
     
     const IndexEntry& entry = it->second;
     std::cout << "   ✅ 找到文件" << std::endl;
+    
+    // ========== 步骤2.5：检查文件状态（防止为已删除文件生成证明）==========
+    if (entry.state != "valid") {
+        std::cerr << "❌ 文件状态为 " << entry.state << "，无法生成证明" << std::endl;
+        return false;
+    }
+    
+    if (entry.TS_F.empty()) {
+        std::cerr << "❌ 文件无认证标签，无法生成证明" << std::endl;
+        return false;
+    }
+    // ===================================================================
     
     // 获取TS_F和公钥
     const std::vector<std::string>& TS_F = entry.TS_F;
