@@ -16,6 +16,19 @@
 #include <iostream>
 #include <fstream>
 #include <jsoncpp/json/json.h>
+#include <functional>
+
+// ==================== 性能监控回调结构体 ====================
+/**
+ * @brief 性能监控回调接口（与client.h保持一致）
+ */
+struct PerformanceCallback_s {
+    // 时间回调 (毫秒)
+    std::function<void(const std::string& name, double time_ms)> on_phase_complete;
+    
+    // 数据大小回调 (字节)
+    std::function<void(const std::string& name, size_t size_bytes)> on_data_size_recorded;
+};
 
 struct IndexKeywords
 {
@@ -70,6 +83,7 @@ public:
     element_t mu;
     mpz_t N;
     bool crypto_initialized;
+    mpz_t r;
     
     // 存储（统一使用IndexEntry，以ID_F为键）
     std::map<std::string, IndexEntry> index_database;
@@ -85,6 +99,9 @@ public:
     std::string FileProofs_dir;
     std::string SearchProof_dir;
     int server_port;
+    
+    // 性能监控回调指针（默认nullptr）
+    PerformanceCallback_s* perf_callback_s;
     
     // 辅助函数
     std::string generate_random_seed();
@@ -247,6 +264,15 @@ public:
     }
     
     void print_detailed_status();
+    
+    /**
+     * @brief 设置性能监控回调（测试专用）
+     * @param callback 回调函数指针，nullptr表示禁用监控
+     */
+    void setPerformanceCallback_s(PerformanceCallback_s* callback) {
+        perf_callback_s = callback;
+    }
+    void hashToScalar(const std::string& input, mpz_t result);
 
     // 密码学函数（修改为void返回值）
     void computeHashH1(const std::string& input, mpz_t result);

@@ -8,8 +8,8 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/home/zsw/codes/Audit-and-Integrity/vds-client/client.cpp" "CMakeFiles/storage_client.dir/client.cpp.o" "gcc" "CMakeFiles/storage_client.dir/client.cpp.o.d"
-  "/home/zsw/codes/Audit-and-Integrity/vds-client/main.cpp" "CMakeFiles/storage_client.dir/main.cpp.o" "gcc" "CMakeFiles/storage_client.dir/main.cpp.o.d"
+  "/home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/client.cpp" "CMakeFiles/storage_client.dir/client.cpp.o" "gcc" "CMakeFiles/storage_client.dir/client.cpp.o.d"
+  "/home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/main.cpp" "CMakeFiles/storage_client.dir/main.cpp.o" "gcc" "CMakeFiles/storage_client.dir/main.cpp.o.d"
   )
 
 # Targets to which this target links.

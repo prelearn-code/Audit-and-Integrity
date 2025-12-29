@@ -14,12 +14,35 @@
 
 namespace fs = std::filesystem;
 
+// ==================== 性能监控宏定义 ====================
+/**
+ * 使用方法：
+ * PERF_TIMER_START(metric_name)
+ * // ... 执行计算 ...
+ * PERF_TIMER_END(metric_name)
+ * // 在计时结束后记录数据大小：
+ * if (perf_callback_c) {
+ *     perf_callback_c->on_data_size_recorded("data_name", data.size());
+ * }
+ */
+#define PERF_TIMER_START(name) \
+    auto perf_##name##_start = std::chrono::high_resolution_clock::now();
+
+#define PERF_TIMER_END(name) \
+    if (perf_callback_c) { \
+        auto perf_##name##_end = std::chrono::high_resolution_clock::now(); \
+        auto perf_##name##_duration = std::chrono::duration_cast<std::chrono::milliseconds>( \
+            perf_##name##_end - perf_##name##_start).count(); \
+        perf_callback_c->on_phase_complete(#name, static_cast<double>(perf_##name##_duration)); \
+    }
+
+
 // ============================================================================
 // 构造函数和析构函数
 // ============================================================================
 
 StorageClient::StorageClient() 
-    : initialized_(false), states_loaded_(false) {
+    : initialized_(false), states_loaded_(false), perf_callback_c(nullptr) {
     mpz_init(N_);
     mpz_init(sk_);
 }
@@ -450,19 +473,23 @@ bool StorageClient::saveKeys(const std::string& key_file) {
         return false;
     }
     
+    std::cout << "[密钥保存] 开始保存密钥到: " << key_file << std::endl;
+    
     std::ofstream file(key_file, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "[错误] 无法创建文件: " << key_file << std::endl;
         return false;
     }
     
-    // 写入mk
+    // 写入mk (32 bytes)
     file.write(reinterpret_cast<const char*>(mk_), 32);
+    std::cout << "[保存] mk (32 bytes)" << std::endl;
     
-    // 写入ek
+    // 写入ek (32 bytes)
     file.write(reinterpret_cast<const char*>(ek_), 32);
+    std::cout << "[保存] ek (32 bytes)" << std::endl;
     
-    // 写入sk
+    // 写入sk (size + data)
     size_t sk_size = (mpz_sizeinbase(sk_, 2) + 7) / 8;
     std::vector<unsigned char> sk_buf(sk_size);
     mpz_export(sk_buf.data(), nullptr, 1, 1, 0, 0, sk_);
@@ -470,14 +497,21 @@ bool StorageClient::saveKeys(const std::string& key_file) {
     uint32_t size_marker = static_cast<uint32_t>(sk_size);
     file.write(reinterpret_cast<const char*>(&size_marker), 4);
     file.write(reinterpret_cast<const char*>(sk_buf.data()), sk_size);
+    std::cout << "[保存] sk (" << sk_size << " bytes)" << std::endl;
     
-    // 写入pk
-    std::string pk_str = serializeElement(pk_);
-    uint32_t pk_size = static_cast<uint32_t>(pk_str.size());
-    file.write(reinterpret_cast<const char*>(&pk_size), 4);
-    file.write(pk_str.c_str(), pk_str.size());
+    // ========================================
+    // 【方案B修改】不保存pk，加载时从sk计算
+    // 原因：
+    // 1. 符合密码学原理（pk = g^sk 可由sk推导）
+    // 2. 减小文件大小
+    // 3. 避免pk和sk不一致的风险
+    // ========================================
     
     file.close();
+    std::cout << "[成功] 密钥保存完成" << std::endl;
+    std::cout << "        格式: mk(32B) + ek(32B) + sk_size(4B) + sk_data" << std::endl;
+    std::cout << "        注意: pk未保存，加载时将从sk计算" << std::endl;
+    
     return true;
 }
 
@@ -492,41 +526,94 @@ bool StorageClient::loadKeys(const std::string& key_file) {
         return false;
     }
     
+    std::cout << "[密钥加载] 开始从文件加载密钥: " << key_file << std::endl;
+    
     std::ifstream file(key_file, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "[错误] 无法打开文件: " << key_file << std::endl;
         return false;
     }
     
-    // 读取mk
+    // ========================================
+    // 步骤1: 读取 mk (32 bytes)
+    // ========================================
     file.read(reinterpret_cast<char*>(mk_), 32);
+    if (file.gcount() != 32) {
+        std::cerr << "[错误] 读取mk失败（期望32字节，实际读取" << file.gcount() << "字节）" << std::endl;
+        file.close();
+        return false;
+    }
+    std::cout << "[成功] mk 已加载 (32 bytes)" << std::endl;
     
-    // 读取ek
+    // ========================================
+    // 步骤2: 读取 ek (32 bytes)
+    // ========================================
     file.read(reinterpret_cast<char*>(ek_), 32);
+    if (file.gcount() != 32) {
+        std::cerr << "[错误] 读取ek失败（期望32字节，实际读取" << file.gcount() << "字节）" << std::endl;
+        file.close();
+        return false;
+    }
+    std::cout << "[成功] ek 已加载 (32 bytes)" << std::endl;
     
-    // 读取sk
+    // ========================================
+    // 步骤3: 读取 sk (4 bytes size + data)
+    // ========================================
     uint32_t sk_size;
     file.read(reinterpret_cast<char*>(&sk_size), 4);
-    
-    std::vector<unsigned char> sk_buf(sk_size);
-    file.read(reinterpret_cast<char*>(sk_buf.data()), sk_size);
-    mpz_import(sk_, sk_size, 1, 1, 0, 0, sk_buf.data());
-    
-    // 读取pk
-    uint32_t pk_size;
-    file.read(reinterpret_cast<char*>(&pk_size), 4);
-    
-    std::vector<char> pk_buf(pk_size);
-    file.read(pk_buf.data(), pk_size);
-    std::string pk_str(pk_buf.begin(), pk_buf.end());
-    
-    if (!deserializeElement(pk_str, pk_)) {
-        std::cerr << "[错误] 公钥反序列化失败" << std::endl;
+    if (file.gcount() != 4) {
+        std::cerr << "[错误] 读取sk大小失败" << std::endl;
         file.close();
         return false;
     }
     
+    // 检查sk_size的合理性（防止读取损坏的文件）
+    if (sk_size == 0 || sk_size > 10000) {
+        std::cerr << "[错误] sk大小异常: " << sk_size << " bytes" << std::endl;
+        std::cerr << "[提示] 文件可能已损坏或格式不正确" << std::endl;
+        file.close();
+        return false;
+    }
+    
+    std::vector<unsigned char> sk_buf(sk_size);
+    file.read(reinterpret_cast<char*>(sk_buf.data()), sk_size);
+    if (file.gcount() != static_cast<std::streamsize>(sk_size)) {
+        std::cerr << "[错误] 读取sk数据失败（期望" << sk_size 
+                  << "字节，实际读取" << file.gcount() << "字节）" << std::endl;
+        file.close();
+        return false;
+    }
+    
+    mpz_import(sk_, sk_size, 1, 1, 0, 0, sk_buf.data());
+    std::cout << "[成功] sk 已加载 (" << mpz_sizeinbase(sk_, 10) << " 十进制位)" << std::endl;
+    
     file.close();
+    
+    // ========================================
+    // 【方案B核心修改】步骤4: 从 sk 计算 pk = g^sk
+    // ========================================
+    std::cout << "[计算] 从私钥计算公钥: pk = g^sk" << std::endl;
+    
+    element_pow_mpz(pk_, g_, sk_);
+    
+    // 验证pk不是单位元（基本健全性检查）
+    if (element_is1(pk_)) {
+        std::cerr << "[错误] 公钥计算错误（结果为单位元）" << std::endl;
+        std::cerr << "[提示] 可能是私钥sk为0或配对参数不匹配" << std::endl;
+        return false;
+    }
+    
+    std::cout << "[成功] pk 计算完成" << std::endl;
+    
+    // ========================================
+    // 完成
+    // ========================================
+    std::cout << "[完成] 密钥加载成功" << std::endl;
+    std::cout << "        mk: 已加载" << std::endl;
+    std::cout << "        ek: 已加载" << std::endl;
+    std::cout << "        sk: 已加载" << std::endl;
+    std::cout << "        pk: 已计算" << std::endl;
+    
     return true;
 }
 
@@ -554,9 +641,13 @@ bool StorageClient::encryptFile(const std::string& file_path,
     std::string original_filename = extractFileName(file_path);
     std::cout << "[加密] 原始文件名: " << original_filename << std::endl;
     
+    // ========== 开始计时：T1 客户端加密总时间 ==========
+    PERF_TIMER_START(client_encrypt_total)
+    
     // 读取文件
     std::vector<unsigned char> plaintext;
     if (!readFile(file_path, plaintext)) {
+        PERF_TIMER_END(client_encrypt_total)  // 失败也记录
         return false;
     }
     std::cout << "[加密] 文件大小: " << plaintext.size() << " 字节" << std::endl;
@@ -565,6 +656,7 @@ bool StorageClient::encryptFile(const std::string& file_path,
     std::vector<unsigned char> ciphertext;
     if (!encryptFileData(plaintext, ciphertext)) {
         std::cerr << "[错误] 文件数据加密失败" << std::endl;
+        PERF_TIMER_END(client_encrypt_total)  // 失败也记录
         return false;
     }
     std::cout << "[加密] 密文大小: " << ciphertext.size() << " 字节" << std::endl;
@@ -591,6 +683,7 @@ bool StorageClient::encryptFile(const std::string& file_path,
         std::cerr << "       请检查:" << std::endl;
         std::cerr << "       1. 目录权限" << std::endl;
         std::cerr << "       2. 磁盘空间" << std::endl;
+        PERF_TIMER_END(client_encrypt_total)  // 失败也记录
         return false;
     }
     std::cout << "[成功] 加密文件已保存: " << enc_file << std::endl;
@@ -1446,7 +1539,14 @@ bool StorageClient::searchKeyword(const std::string& keyword) {
     std::cout << "[搜索令牌] 关键词: " << keyword << std::endl;
     
     // 2. 生成搜索令牌
+    // ========== 开始计时：T2 令牌生成 ==========
+    PERF_TIMER_START(token_generation)
+    
     std::string search_token = generateSearchToken(keyword);
+    
+    // ========== 结束计时：T2 令牌生成 ==========
+    PERF_TIMER_END(token_generation)
+    
     if (search_token.empty()) {
         std::cerr << "[错误] 搜索令牌生成失败" << std::endl;
         return false;
@@ -1482,8 +1582,15 @@ bool StorageClient::searchKeyword(const std::string& keyword) {
     
     Json::StreamWriterBuilder writer;
     writer["indentation"] = "    ";
-    ofs << Json::writeString(writer, root);
+    std::string search_json_str = Json::writeString(writer, root);
+    ofs << search_json_str;
     ofs.close();
+    
+    // ========== 记录数据大小：S4 ==========
+    if (perf_callback_c) {
+        perf_callback_c->on_data_size_recorded("search_request_size", search_json_str.length());
+    }
+    
     
     std::cout << "[成功] 搜索令牌已生成: " << output_path << std::endl;
     std::cout << "\n[完成] 搜索令牌文件包含:" << std::endl;
@@ -1493,4 +1600,3 @@ bool StorageClient::searchKeyword(const std::string& keyword) {
     
     return true;
 }
-

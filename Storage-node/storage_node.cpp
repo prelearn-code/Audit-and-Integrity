@@ -2330,18 +2330,6 @@ std::vector<std::string> StorageNode::list_all_files() {
     return file_list;
 }
 
-std::vector<std::string> StorageNode::list_files_by_pk(const std::string& PK) {
-    std::vector<std::string> file_list;
-    
-    for (const auto& pair : index_database) {
-        if (pair.second.PK == PK) {
-            file_list.push_back(pair.first);
-        }
-    }
-    
-    return file_list;
-}
-
 // ==================== 搜索数据库操作 ====================
 
 bool StorageNode::load_search_database() {
