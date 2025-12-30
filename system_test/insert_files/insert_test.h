@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <jsoncpp/json/json.h>
 #include "../../vds-client/client.h"
 #include "../../Storage-node/storage_node.h"
@@ -145,10 +146,19 @@ public:
 private:
     // ==================== 配置参数 ====================
     std::string keywords_file_;        // 文件-关键词映射JSON路径
-    std::string base_dir_;             // 数据基础目录
+    std::string base_dir_;             // 原始数据目录（用于重定位绝对路径）
     std::string public_params_file_;   // 公共参数文件
+    std::string private_key_file_;     // 客户端私钥文件
+    std::string keyword_states_file_;  // 关键词状态文件
     std::string client_data_dir_;      // 客户端数据目录
+    std::string client_insert_dir_;    // 客户端insert目录
+    std::string client_enc_dir_;       // 客户端加密文件目录
+    std::string client_meta_dir_;      // 客户端元数据目录
+    std::string client_search_dir_;    // 客户端搜索令牌目录
+    std::string client_deles_dir_;     // 客户端删除令牌目录
     std::string server_data_dir_;      // 服务端数据目录
+    std::string server_insert_dir_;    // 服务端读取insert的目录
+    std::string server_enc_dir_;       // 服务端读取密文的目录
     int server_port_;                  // 服务端端口
     int max_files_;                    // 最大测试文件数（0=全部）
     bool verbose_;                     // 是否显示详细日志
@@ -221,6 +231,18 @@ private:
      * @brief 清理性能监控数据
      */
     void clearPerformanceData();
+
+    /**
+     * @brief 与客户端一致的安全文件名生成规则（绝对路径替换分隔符）
+     */
+    std::string makeSafeName(const std::string& file_path) const;
+
+    /**
+     * @brief 根据基础目录修正文件路径
+     * @param raw_path 关键词映射中的原始路径
+     * @return 可用的文件路径
+     */
+    std::string resolveFilePath(const std::string& raw_path) const;
 };
 
 #endif // INSERT_PERFORMANCE_TEST_H

@@ -1,0 +1,12 @@
+{
+  "test_name": "search proof verify performance",
+  "paths": {
+    "public_params": "vds-client/data/public_params.json",
+    "server_data_dir": "Storage-node/data",
+    "proof_dir": "Storage-node/data/SearchProof"
+  },
+  "options": {
+    "max_proofs": 0,
+    "verbose": true
+  }
+}
