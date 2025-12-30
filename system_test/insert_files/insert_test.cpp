@@ -3,6 +3,13 @@
 #include <sstream>
 #include <algorithm>
 #include <numeric>
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
+namespace {
+const char* kDefaultConfigPath = "system_test/insert_files/config/insert_test_config.json";
+}
 
 // ==================== 构造函数和析构函数 ====================
 
@@ -69,25 +76,63 @@ bool InsertPerformanceTest::loadConfig(const std::string& config_file) {
         return false;
     }
     
-    // 提取配置
-    keywords_file_ = config["data_source"]["keywords_file"].asString();
-    base_dir_ = config["data_source"]["base_dir"].asString();
+    // 提取路径配置
+    const Json::Value& paths = config["paths"];
+    keywords_file_ = paths.get("keywords_file", "").asString();
+    base_dir_ = paths.get("dataset_root", "").asString();
+    public_params_file_ = paths.get("public_params", "").asString();
+    private_key_file_ = paths.get("private_key", "private_key.dat").asString();
     
-    public_params_file_ = config["client_config"]["public_params"].asString();
-    client_data_dir_ = config["client_config"]["data_dir"].asString();
+    const Json::Value& client_cfg = paths["client"];
+    client_data_dir_ = client_cfg.get("data_dir", "data").asString();
+    client_insert_dir_ = client_cfg.get("insert_dir", client_data_dir_ + "/Insert").asString();
+    client_enc_dir_ = client_cfg.get("enc_dir", client_data_dir_ + "/EncFiles").asString();
+    client_meta_dir_ = client_cfg.get("metadata_dir", client_data_dir_ + "/MetaFiles").asString();
+    client_search_dir_ = client_cfg.get("search_dir", client_data_dir_ + "/Search").asString();
+    client_deles_dir_ = client_cfg.get("deles_dir", client_data_dir_ + "/Deles").asString();
+    keyword_states_file_ = client_cfg.get("keyword_states_file", client_data_dir_ + "/keyword_states.json").asString();
     
-    server_data_dir_ = config["server_config"]["data_dir"].asString();
-    server_port_ = config["server_config"]["port"].asInt();
+    const Json::Value& server_cfg = paths["server"];
+    server_data_dir_ = server_cfg.get("data_dir", "Storage-node/data").asString();
+    server_insert_dir_ = server_cfg.get("insert_dir", client_insert_dir_).asString();
+    server_enc_dir_ = server_cfg.get("enc_dir", client_enc_dir_).asString();
+    server_port_ = server_cfg.get("port", 9000).asInt();
     
-    max_files_ = config["options"]["max_files"].asInt();
-    verbose_ = config["options"]["verbose"].asBool();
-    save_intermediate_ = config["options"]["save_intermediate"].asBool();
+    // 提取选项
+    const Json::Value& options = config["options"];
+    max_files_ = options.get("max_files", 0).asInt();
+    verbose_ = options.get("verbose", true).asBool();
+    save_intermediate_ = options.get("save_intermediate", true).asBool();
     
-    statistics_.test_name = config["test_name"].asString();
+    statistics_.test_name = config.get("test_name", "insert_performance").asString();
     
     std::cout << "[配置] 关键词文件: " << keywords_file_ << std::endl;
-    std::cout << "[配置] 数据目录: " << base_dir_ << std::endl;
+    std::cout << "[配置] 数据根目录: " << base_dir_ << std::endl;
+    std::cout << "[配置] 客户端数据目录: " << client_data_dir_ << std::endl;
+    std::cout << "[配置] 客户端密钥: " << private_key_file_ << std::endl;
+    std::cout << "[配置] 服务端数据目录: " << server_data_dir_ << std::endl;
     std::cout << "[配置] 最大文件数: " << (max_files_ > 0 ? std::to_string(max_files_) : "全部") << std::endl;
+    
+    // 规范化路径，便于后续检查
+    keywords_file_ = fs::path(keywords_file_).lexically_normal().string();
+    base_dir_ = fs::path(base_dir_).lexically_normal().string();
+    public_params_file_ = fs::path(public_params_file_).lexically_normal().string();
+    private_key_file_ = fs::path(private_key_file_).lexically_normal().string();
+    client_data_dir_ = fs::path(client_data_dir_).lexically_normal().string();
+    client_insert_dir_ = fs::path(client_insert_dir_).lexically_normal().string();
+    client_enc_dir_ = fs::path(client_enc_dir_).lexically_normal().string();
+    client_meta_dir_ = fs::path(client_meta_dir_).lexically_normal().string();
+    client_search_dir_ = fs::path(client_search_dir_).lexically_normal().string();
+    client_deles_dir_ = fs::path(client_deles_dir_).lexically_normal().string();
+    keyword_states_file_ = fs::path(keyword_states_file_).lexically_normal().string();
+    server_data_dir_ = fs::path(server_data_dir_).lexically_normal().string();
+    server_insert_dir_ = fs::path(server_insert_dir_).lexically_normal().string();
+    server_enc_dir_ = fs::path(server_enc_dir_).lexically_normal().string();
+    
+    if (!fs::exists(keywords_file_)) {
+        std::cerr << "[错误] 关键词文件不存在: " << keywords_file_ << std::endl;
+        return false;
+    }
     
     return true;
 }
@@ -112,21 +157,37 @@ bool InsertPerformanceTest::loadKeywordsMapping() {
     
     // 解析文件列表
     const Json::Value& files = root["files"];
-    if (!files.isArray()) {
-        std::cerr << "[错误] 'files'字段不是数组" << std::endl;
-        return false;
-    }
-    
-    for (const auto& file_entry : files) {
-        std::string path = file_entry["path"].asString();
-        std::vector<std::string> keywords;
-        
-        const Json::Value& kw_array = file_entry["keywords"];
-        for (const auto& kw : kw_array) {
-            keywords.push_back(kw.asString());
+    if (files.isArray()) {
+        for (const auto& file_entry : files) {
+            std::string path = resolveFilePath(file_entry["path"].asString());
+            std::vector<std::string> keywords;
+            
+            const Json::Value& kw_array = file_entry["keywords"];
+            for (const auto& kw : kw_array) {
+                keywords.push_back(kw.asString());
+            }
+            
+            file_keywords_map_[path] = keywords;
         }
-        
-        file_keywords_map_[path] = keywords;
+    } else if (root.isObject()) {
+        // 支持平铺的 path -> keyword(s) 映射
+        for (const auto& name : root.getMemberNames()) {
+            std::string path = resolveFilePath(name);
+            std::vector<std::string> keywords;
+            const Json::Value& kw_value = root[name];
+            
+            if (kw_value.isArray()) {
+                for (const auto& kw : kw_value) {
+                    keywords.push_back(kw.asString());
+                }
+            } else {
+                keywords.push_back(kw_value.asString());
+            }
+            file_keywords_map_[path] = keywords;
+        }
+    } else {
+        std::cerr << "[错误] 未找到有效的文件映射字段" << std::endl;
+        return false;
     }
     
     std::cout << "[数据] 已加载 " << file_keywords_map_.size() << " 个文件映射" << std::endl;
@@ -148,6 +209,16 @@ bool InsertPerformanceTest::initialize() {
     std::cout << "[初始化] 创建客户端..." << std::endl;
     client_ = new StorageClient();
     
+    // 配置客户端数据目录，确保与服务端读取路径一致
+    StorageClient::configureDataDirectories(
+        client_data_dir_,
+        client_insert_dir_,
+        client_enc_dir_,
+        client_meta_dir_,
+        client_search_dir_,
+        client_deles_dir_,
+        keyword_states_file_);
+    
     if (!client_->initialize(public_params_file_)) {
         std::cerr << "[错误] 客户端初始化失败" << std::endl;
         return false;
@@ -159,12 +230,18 @@ bool InsertPerformanceTest::initialize() {
     }
     
     // 加载或生成密钥
-    if (!client_->loadKeys("private_key.dat")) {
+    fs::path key_dir = fs::path(private_key_file_).parent_path();
+    if (!key_dir.empty()) {
+        fs::create_directories(key_dir);
+    }
+    if (!client_->loadKeys(private_key_file_)) {
         std::cout << "[初始化] 未找到密钥，生成新密钥..." << std::endl;
-        if (!client_->generateKeys()) {
+        if (!client_->generateKeys(private_key_file_)) {
             std::cerr << "[错误] 密钥生成失败" << std::endl;
             return false;
         }
+        // 确保保存到配置指定的位置
+        client_->saveKeys(private_key_file_);
     }
     
     // 设置性能监控回调
@@ -190,6 +267,18 @@ bool InsertPerformanceTest::initialize() {
     
     // 设置性能监控回调
     server_->setPerformanceCallback_s(&callback_s);
+    
+    std::cout << "[初始化] 客户端Insert目录: " << client_insert_dir_ << std::endl;
+    std::cout << "[初始化] 客户端密文目录: " << client_enc_dir_ << std::endl;
+    std::cout << "[初始化] 服务端参数目录: " << server_data_dir_ << std::endl;
+    if (server_insert_dir_ != client_insert_dir_) {
+        std::cout << "[提示] 服务端插入参数将从 " << server_insert_dir_ 
+                  << " 读取，与客户端生成位置不同" << std::endl;
+    }
+    if (server_enc_dir_ != client_enc_dir_) {
+        std::cout << "[提示] 服务端密文将从 " << server_enc_dir_ 
+                  << " 读取，与客户端生成位置不同" << std::endl;
+    }
     
     std::cout << "[初始化] ✅ 初始化完成" << std::endl;
     
@@ -229,6 +318,19 @@ bool InsertPerformanceTest::runTest() {
             std::cout << kw << " ";
         }
         std::cout << std::endl;
+        
+        if (!fs::exists(entry.first)) {
+            std::cerr << "⚠️  文件不存在，跳过: " << entry.first << std::endl;
+            FileTestResult result;
+            result.file_path = entry.first;
+            result.keyword_count = entry.second.size();
+            result.timestamp = getCurrentTimestamp();
+            result.success = false;
+            result.error_msg = "文件不存在";
+            results_.push_back(result);
+            printProgress(count, total);
+            continue;
+        }
         
         // 测试单个文件
         FileTestResult result = testSingleFile(entry.first, entry.second);
@@ -291,10 +393,19 @@ InsertPerformanceTest::FileTestResult InsertPerformanceTest::testSingleFile(
         std::cout << "  [步骤2] 服务端插入文件..." << std::endl;
         
         // 找到生成的insert.json和.enc文件
-        // 这里简化处理，实际应该从client的输出中获取
         std::string filename = file_path.substr(file_path.find_last_of("/\\") + 1);
-        std::string enc_file = client_data_dir_ + "/EncFiles/" + filename + ".enc";
-        std::string insert_json = client_data_dir_ + "/Insert/" + filename + "_insert.json";
+        std::string client_enc_file = client_enc_dir_ + "/" + filename + ".enc";
+        std::string client_insert_json = client_insert_dir_ + "/" + filename + "_insert.json";
+        std::string server_enc_file = server_enc_dir_ + "/" + filename + ".enc";
+        std::string server_insert_json = server_insert_dir_ + "/" + filename + "_insert.json";
+        
+        std::string enc_file = fs::exists(server_enc_file) ? server_enc_file : client_enc_file;
+        std::string insert_json = fs::exists(server_insert_json) ? server_insert_json : client_insert_json;
+        
+        if (verbose_) {
+            std::cout << "    使用的insert.json路径: " << insert_json << std::endl;
+            std::cout << "    使用的密文路径: " << enc_file << std::endl;
+        }
         
         // 清理性能数据
         clearPerformanceData();
@@ -640,9 +751,42 @@ void InsertPerformanceTest::clearPerformanceData() {
     current_sizes_.clear();
 }
 
+std::string InsertPerformanceTest::resolveFilePath(const std::string& raw_path) const {
+    fs::path original(raw_path);
+    if (fs::exists(original)) {
+        return original.lexically_normal().string();
+    }
+    
+    if (!base_dir_.empty()) {
+        fs::path base(base_dir_);
+        std::string raw_str = raw_path;
+        std::string base_name = base.filename().string();
+        
+        auto pos = raw_str.find(base_name);
+        if (pos != std::string::npos) {
+            std::string relative_tail = raw_str.substr(pos + base_name.length());
+            if (!relative_tail.empty() && (relative_tail[0] == '/' || relative_tail[0] == '\\')) {
+                relative_tail = relative_tail.substr(1);
+            }
+            
+            fs::path candidate = base / relative_tail;
+            if (fs::exists(candidate)) {
+                return candidate.lexically_normal().string();
+            }
+        }
+        
+        fs::path filename_only = base / original.filename();
+        if (fs::exists(filename_only)) {
+            return filename_only.lexically_normal().string();
+        }
+    }
+    
+    return original.lexically_normal().string();
+}
+
 // ==================== MAIN函数 ====================
 
-int main(int argc, char* argv[]) {
+int main() {
     std::cout << R"(
 ╔══════════════════════════════════════════════════════════════╗
 ║          插入操作性能测试程序                                  ║
@@ -651,10 +795,7 @@ int main(int argc, char* argv[]) {
 )" << std::endl;
     
     // 获取配置文件路径
-    std::string config_file = "test_config.json";
-    if (argc > 1) {
-        config_file = argv[1];
-    }
+    std::string config_file = kDefaultConfigPath;
     
     // 创建测试实例
     InsertPerformanceTest test;

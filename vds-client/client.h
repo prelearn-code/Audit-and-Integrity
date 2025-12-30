@@ -87,7 +87,7 @@ public:
      * 
      * 注意：不再从文件加载参数，仅生成密钥
      */
-    bool generateKeys();
+    bool generateKeys(const std::string& private_key_path = "private_key.dat");
     
     /**
      * @brief 加密文件并生成元数据（v4.1简化）
@@ -172,6 +172,24 @@ public:
      * - 防止在参数未加载时加载密钥导致的错误
      */
     bool loadKeys(const std::string& key_file);
+
+    /**
+     * @brief 覆盖数据目录，用于测试或自定义部署
+     * @param data_dir 根数据目录
+     * @param insert_dir Insert目录（可选，默认为 data_dir/Insert）
+     * @param enc_dir EncFiles目录（可选，默认为 data_dir/EncFiles）
+     * @param meta_dir MetaFiles目录（可选，默认为 data_dir/MetaFiles）
+     * @param search_dir Search目录（可选，默认为 data_dir/Search）
+     * @param deles_dir Deles目录（可选，默认为 data_dir/Deles）
+     * @param keyword_states_file 关键词状态文件路径（可选，默认为 data_dir/keyword_states.json）
+     */
+    static void configureDataDirectories(const std::string& data_dir,
+                                         const std::string& insert_dir = "",
+                                         const std::string& enc_dir = "",
+                                         const std::string& meta_dir = "",
+                                         const std::string& search_dir = "",
+                                         const std::string& deles_dir = "",
+                                         const std::string& keyword_states_file = "");
     
     // ============ 关键词状态管理功能 ============
     
@@ -373,14 +391,14 @@ private:
     bool states_loaded_;                 // 状态文件是否已加载
     Json::Value keyword_states_data_;    // 存储完整的JSON数据
     
-    // v4.2更新：数据目录路径常量（新增 DELES_DIR）
-    inline static const std::string DATA_DIR = "../data";
-    inline static const std::string INSERT_DIR = "../data/Insert";
-    inline static const std::string DELES_DIR = "../data/Deles";          // v4.2新增
-    inline static const std::string ENC_FILES_DIR = "../data/EncFiles";
-    inline static const std::string META_FILES_DIR = "../data/MetaFiles";
-    inline static const std::string SEARCH_DIR = "../data/Search";
-    inline static const std::string KEYWORD_STATES_FILE = "../data/keyword_states.json";
+    // v4.2更新：数据目录路径（新增 DELES_DIR），在测试中可覆盖
+    inline static std::string DATA_DIR = "../data";
+    inline static std::string INSERT_DIR = "../data/Insert";
+    inline static std::string DELES_DIR = "../data/Deles";          // v4.2新增
+    inline static std::string ENC_FILES_DIR = "../data/EncFiles";
+    inline static std::string META_FILES_DIR = "../data/MetaFiles";
+    inline static std::string SEARCH_DIR = "../data/Search";
+    inline static std::string KEYWORD_STATES_FILE = "../data/keyword_states.json";
     
     // 常量定义
     inline static constexpr size_t BLOCK_SIZE = 4096;
