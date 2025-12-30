@@ -392,12 +392,12 @@ InsertPerformanceTest::FileTestResult InsertPerformanceTest::testSingleFile(
         // 步骤2：服务端插入文件
         std::cout << "  [步骤2] 服务端插入文件..." << std::endl;
         
-        // 找到生成的insert.json和.enc文件
-        std::string filename = file_path.substr(file_path.find_last_of("/\\") + 1);
-        std::string client_enc_file = client_enc_dir_ + "/" + filename + ".enc";
-        std::string client_insert_json = client_insert_dir_ + "/" + filename + "_insert.json";
-        std::string server_enc_file = server_enc_dir_ + "/" + filename + ".enc";
-        std::string server_insert_json = server_insert_dir_ + "/" + filename + "_insert.json";
+        // 找到生成的insert.json和.enc文件（与客户端命名规则一致：绝对路径+分隔符替换）
+        std::string safe_name = makeSafeName(file_path);
+        std::string client_enc_file = client_enc_dir_ + "/" + safe_name + ".enc";
+        std::string client_insert_json = client_insert_dir_ + "/" + safe_name + "_insert.json";
+        std::string server_enc_file = server_enc_dir_ + "/" + safe_name + ".enc";
+        std::string server_insert_json = server_insert_dir_ + "/" + safe_name + "_insert.json";
         
         std::string enc_file = fs::exists(server_enc_file) ? server_enc_file : client_enc_file;
         std::string insert_json = fs::exists(server_insert_json) ? server_insert_json : client_insert_json;
@@ -782,6 +782,16 @@ std::string InsertPerformanceTest::resolveFilePath(const std::string& raw_path) 
     }
     
     return original.lexically_normal().string();
+}
+
+std::string InsertPerformanceTest::makeSafeName(const std::string& file_path) const {
+    fs::path abs_path = fs::absolute(file_path).lexically_normal();
+    std::string abs_str = abs_path.string();
+    std::string safe = abs_str;
+    std::replace(safe.begin(), safe.end(), '/', '_');
+    std::replace(safe.begin(), safe.end(), '\\', '_');
+    std::replace(safe.begin(), safe.end(), ':', '_');
+    return safe;
 }
 
 // ==================== MAIN函数 ====================

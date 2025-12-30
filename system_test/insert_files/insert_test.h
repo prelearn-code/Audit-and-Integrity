@@ -233,6 +233,11 @@ private:
     void clearPerformanceData();
 
     /**
+     * @brief 与客户端一致的安全文件名生成规则（绝对路径替换分隔符）
+     */
+    std::string makeSafeName(const std::string& file_path) const;
+
+    /**
      * @brief 根据基础目录修正文件路径
      * @param raw_path 关键词映射中的原始路径
      * @return 可用的文件路径
