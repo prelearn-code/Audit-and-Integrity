@@ -10,43 +10,25 @@
 #include <gmp.h>
 #include <pbc/pbc.h>
 #include <jsoncpp/json/json.h>
+#include <functional>
 
+// ==================== 性能监控回调结构体 ====================
 /**
- * @brief 本地加密存储客户端 v4.2
- * 实现可验证的可搜索加密与前向安全性
+ * @brief 性能监控回调接口（用于测试时精确测量时间和数据大小）
  * 
- * v4.2 主要变更（新增删除和搜索功能）：
- * =========================================
- * 【核心修改】
- * - 新增 deleteFile() 函数：生成删除令牌
- * - 新增 searchKeyword() 函数：生成搜索令牌
- * - Deles/ 和 Search/ 目录在启动时自动创建
- * 
- * v4.1 主要变更（目录结构重构）：
- * ===================================
- * 【核心修改】
- * - 所有运行时文件统一管理到 ./data 目录
- * - 自动创建和管理目录结构
- * - 使用原始文件名而非用户指定前缀
- * - 自动更新 keyword_states.json
- * - 文件存在时添加时间戳后缀
- * 
- * 【目录结构】
- * ./data/
- *   ├── Insert/           # insert.json 文件
- *   ├── Deles/            # 删除令牌文件
- *   ├── EncFiles/         # 加密文件 (.enc)
- *   ├── MetaFiles/        # 元数据文件
- *   ├── Search/           # 搜索令牌文件
- *   └── keyword_states.json  # 关键词状态（自动更新）
- * 
- * 【接口简化】
- * - encryptFile(file_path, keywords) - 移除手动指定输出路径
- * - initializeDataDirectories() - 新增目录初始化
- * - extractFileName() - 新增文件名提取
- * - deleteFile(file_id) - v4.2新增：生成删除令牌
- * - searchKeyword(keyword) - v4.2新增：生成搜索令牌
+ * 设计原则：
+ * 1. 时间测量在计算完成后立即回调
+ * 2. 数据大小测量在计时结束后回调
+ * 3. 正常使用时回调指针为nullptr，零性能开销
  */
+struct PerformanceCallback_c {
+    // 时间回调 (毫秒)
+    std::function<void(const std::string& name, double time_ms)> on_phase_complete;
+    
+    // 数据大小回调 (字节)
+    std::function<void(const std::string& name, size_t size_bytes)> on_data_size_recorded;
+};
+
 class StorageClient {
 public:
     /**
@@ -105,7 +87,7 @@ public:
      * 
      * 注意：不再从文件加载参数，仅生成密钥
      */
-    bool generateKeys();
+    bool generateKeys(const std::string& private_key_path = "private_key.dat");
     
     /**
      * @brief 加密文件并生成元数据（v4.1简化）
@@ -190,6 +172,24 @@ public:
      * - 防止在参数未加载时加载密钥导致的错误
      */
     bool loadKeys(const std::string& key_file);
+
+    /**
+     * @brief 覆盖数据目录，用于测试或自定义部署
+     * @param data_dir 根数据目录
+     * @param insert_dir Insert目录（可选，默认为 data_dir/Insert）
+     * @param enc_dir EncFiles目录（可选，默认为 data_dir/EncFiles）
+     * @param meta_dir MetaFiles目录（可选，默认为 data_dir/MetaFiles）
+     * @param search_dir Search目录（可选，默认为 data_dir/Search）
+     * @param deles_dir Deles目录（可选，默认为 data_dir/Deles）
+     * @param keyword_states_file 关键词状态文件路径（可选，默认为 data_dir/keyword_states.json）
+     */
+    static void configureDataDirectories(const std::string& data_dir,
+                                         const std::string& insert_dir = "",
+                                         const std::string& enc_dir = "",
+                                         const std::string& meta_dir = "",
+                                         const std::string& search_dir = "",
+                                         const std::string& deles_dir = "",
+                                         const std::string& keyword_states_file = "");
     
     // ============ 关键词状态管理功能 ============
     
@@ -233,6 +233,24 @@ public:
      * @return 文件名
      */
     std::string extractFileName(const std::string& file_path);
+    
+    /**
+     * @brief 设置性能监控回调（测试专用）
+     * @param callback 回调函数指针，nullptr表示禁用监控
+     * 
+     * 使用示例：
+     * PerformanceCallback callback;
+     * callback.on_phase_complete = [](const std::string& phase, double time) {
+     *     std::cout << phase << ": " << time << "ms" << std::endl;
+     * };
+     * callback.on_data_size_recorded = [](const std::string& name, size_t size) {
+     *     std::cout << name << ": " << size << " bytes" << std::endl;
+     * };
+     * client.setPerformanceCallback(&callback);
+     */
+    void setPerformanceCallback_c(PerformanceCallback_c* callback) {
+        perf_callback_c = callback;
+    }
 
 private:
     // ============ 密码学操作 ============
@@ -373,19 +391,22 @@ private:
     bool states_loaded_;                 // 状态文件是否已加载
     Json::Value keyword_states_data_;    // 存储完整的JSON数据
     
-    // v4.2更新：数据目录路径常量（新增 DELES_DIR）
-    inline static const std::string DATA_DIR = "../data";
-    inline static const std::string INSERT_DIR = "../data/Insert";
-    inline static const std::string DELES_DIR = "../data/Deles";          // v4.2新增
-    inline static const std::string ENC_FILES_DIR = "../data/EncFiles";
-    inline static const std::string META_FILES_DIR = "../data/MetaFiles";
-    inline static const std::string SEARCH_DIR = "../data/Search";
-    inline static const std::string KEYWORD_STATES_FILE = "../data/keyword_states.json";
+    // v4.2更新：数据目录路径（新增 DELES_DIR），在测试中可覆盖
+    inline static std::string DATA_DIR = "../data";
+    inline static std::string INSERT_DIR = "../data/Insert";
+    inline static std::string DELES_DIR = "../data/Deles";          // v4.2新增
+    inline static std::string ENC_FILES_DIR = "../data/EncFiles";
+    inline static std::string META_FILES_DIR = "../data/MetaFiles";
+    inline static std::string SEARCH_DIR = "../data/Search";
+    inline static std::string KEYWORD_STATES_FILE = "../data/keyword_states.json";
     
     // 常量定义
     inline static constexpr size_t BLOCK_SIZE = 4096;
     inline static constexpr size_t SECTOR_SIZE = 256;
     inline static constexpr size_t SECTORS_PER_BLOCK = BLOCK_SIZE / SECTOR_SIZE;
+    
+    // 性能监控回调指针（默认nullptr，测试时设置）
+    PerformanceCallback_c* perf_callback_c;
 };
 
 #endif // DECENTRALIZED_STORAGE_CLIENT_H

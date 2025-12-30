@@ -53,10 +53,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/zsw/codes/Audit-and-Integrity/vds-client
+CMAKE_SOURCE_DIR = /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/zsw/codes/Audit-and-Integrity/vds-client/build
+CMAKE_BINARY_DIR = /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/build
 
 # Include any dependencies generated for this target.
 include CMakeFiles/storage_client.dir/depend.make
@@ -72,30 +72,30 @@ include CMakeFiles/storage_client.dir/flags.make
 CMakeFiles/storage_client.dir/main.cpp.o: CMakeFiles/storage_client.dir/flags.make
 CMakeFiles/storage_client.dir/main.cpp.o: ../main.cpp
 CMakeFiles/storage_client.dir/main.cpp.o: CMakeFiles/storage_client.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/zsw/codes/Audit-and-Integrity/vds-client/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/storage_client.dir/main.cpp.o"
-	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_client.dir/main.cpp.o -MF CMakeFiles/storage_client.dir/main.cpp.o.d -o CMakeFiles/storage_client.dir/main.cpp.o -c /home/zsw/codes/Audit-and-Integrity/vds-client/main.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/storage_client.dir/main.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_client.dir/main.cpp.o -MF CMakeFiles/storage_client.dir/main.cpp.o.d -o CMakeFiles/storage_client.dir/main.cpp.o -c /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/main.cpp
 
 CMakeFiles/storage_client.dir/main.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/storage_client.dir/main.cpp.i"
-	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit-and-Integrity/vds-client/main.cpp > CMakeFiles/storage_client.dir/main.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/main.cpp > CMakeFiles/storage_client.dir/main.cpp.i
 
 CMakeFiles/storage_client.dir/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/storage_client.dir/main.cpp.s"
-	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit-and-Integrity/vds-client/main.cpp -o CMakeFiles/storage_client.dir/main.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/main.cpp -o CMakeFiles/storage_client.dir/main.cpp.s
 
 CMakeFiles/storage_client.dir/client.cpp.o: CMakeFiles/storage_client.dir/flags.make
 CMakeFiles/storage_client.dir/client.cpp.o: ../client.cpp
 CMakeFiles/storage_client.dir/client.cpp.o: CMakeFiles/storage_client.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/zsw/codes/Audit-and-Integrity/vds-client/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/storage_client.dir/client.cpp.o"
-	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_client.dir/client.cpp.o -MF CMakeFiles/storage_client.dir/client.cpp.o.d -o CMakeFiles/storage_client.dir/client.cpp.o -c /home/zsw/codes/Audit-and-Integrity/vds-client/client.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/storage_client.dir/client.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/storage_client.dir/client.cpp.o -MF CMakeFiles/storage_client.dir/client.cpp.o.d -o CMakeFiles/storage_client.dir/client.cpp.o -c /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/client.cpp
 
 CMakeFiles/storage_client.dir/client.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/storage_client.dir/client.cpp.i"
-	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit-and-Integrity/vds-client/client.cpp > CMakeFiles/storage_client.dir/client.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/client.cpp > CMakeFiles/storage_client.dir/client.cpp.i
 
 CMakeFiles/storage_client.dir/client.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/storage_client.dir/client.cpp.s"
-	/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit-and-Integrity/vds-client/client.cpp -o CMakeFiles/storage_client.dir/client.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/client.cpp -o CMakeFiles/storage_client.dir/client.cpp.s
 
 # Object files for target storage_client
 storage_client_OBJECTS = \
@@ -113,7 +113,7 @@ storage_client: /usr/lib/x86_64-linux-gnu/libssl.so
 storage_client: /usr/lib/x86_64-linux-gnu/libcrypto.so
 storage_client: /usr/lib/x86_64-linux-gnu/libcurl.so
 storage_client: CMakeFiles/storage_client.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/zsw/codes/Audit-and-Integrity/vds-client/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable storage_client"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable storage_client"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/storage_client.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -125,6 +125,6 @@ CMakeFiles/storage_client.dir/clean:
 .PHONY : CMakeFiles/storage_client.dir/clean
 
 CMakeFiles/storage_client.dir/depend:
-	cd /home/zsw/codes/Audit-and-Integrity/vds-client/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/zsw/codes/Audit-and-Integrity/vds-client /home/zsw/codes/Audit-and-Integrity/vds-client /home/zsw/codes/Audit-and-Integrity/vds-client/build /home/zsw/codes/Audit-and-Integrity/vds-client/build /home/zsw/codes/Audit-and-Integrity/vds-client/build/CMakeFiles/storage_client.dir/DependInfo.cmake --color=$(COLOR)
+	cd /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/build /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/build /home/zsw/codes/Audit_TEST/Audit-and-Integrity/vds-client/build/CMakeFiles/storage_client.dir/DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/storage_client.dir/depend
 

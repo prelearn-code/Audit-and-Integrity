@@ -6,6 +6,27 @@
 #include <algorithm>
 #include <cstring>
 
+namespace {
+class ScopedTimerServer {
+public:
+    ScopedTimerServer(PerformanceCallback_s* cb, const std::string& name)
+        : cb_(cb), name_(name), active_(cb != nullptr),
+          start_(std::chrono::high_resolution_clock::now()) {}
+    ~ScopedTimerServer() {
+        if (active_) {
+            auto end = std::chrono::high_resolution_clock::now();
+            double ms = std::chrono::duration<double, std::milli>(end - start_).count();
+            cb_->on_phase_complete(name_, ms);
+        }
+    }
+private:
+    PerformanceCallback_s* cb_;
+    std::string name_;
+    bool active_;
+    std::chrono::high_resolution_clock::time_point start_;
+};
+} // namespace
+
 // ==================== 构造函数和析构函数 ====================
 
 StorageNode::StorageNode(const std::string& data_directory, int port) 
@@ -927,6 +948,7 @@ void StorageNode::update_statistics(const std::string& operation) {
 // ==================== 文件操作 ====================
 
 bool StorageNode::insert_file(const std::string& param_json_path, const std::string& enc_file_path) {
+    ScopedTimerServer timer(perf_callback_s, "server_insert_total");
     std::cout << "\n📤 插入文件..." << std::endl;
     std::cout << "   参数文件: " << param_json_path << std::endl;
     std::cout << "   加密文件: " << enc_file_path << std::endl;
@@ -1243,6 +1265,7 @@ bool StorageNode::delete_file_from_json(const std::string& delete_json_path) {
 }
 
 bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_json_path) {
+    ScopedTimerServer timer(perf_callback_s, "server_search_total");
     std::cout << "\n🔍 执行关键词关联文件证明搜索..." << std::endl;
     
     // ========== 步骤1: 系统初始化 ==========
@@ -2325,18 +2348,6 @@ std::vector<std::string> StorageNode::list_all_files() {
     
     for (const auto& pair : index_database) {
         file_list.push_back(pair.first);
-    }
-    
-    return file_list;
-}
-
-std::vector<std::string> StorageNode::list_files_by_pk(const std::string& PK) {
-    std::vector<std::string> file_list;
-    
-    for (const auto& pair : index_database) {
-        if (pair.second.PK == PK) {
-            file_list.push_back(pair.first);
-        }
     }
     
     return file_list;
