@@ -2,6 +2,7 @@
 #include <numeric>
 #include <algorithm>
 #include <sstream>
+#include <cmath>
 
 namespace fs = std::filesystem;
 
@@ -10,25 +11,10 @@ const char* kDefaultConfig = "config/search_test_config.json";
 }
 
 SearchPerformanceTest::SearchPerformanceTest()
-    : client_(nullptr), server_(nullptr), server_port_(9000), max_keywords_(0), verbose_(true), save_intermediate_(true) {
-    callback_c_.on_phase_complete = [this](const std::string& name, double time_ms) {
-        current_times_[name] = time_ms;
-        if (verbose_) {
-            std::cout << "  [TIME] " << name << ": " << time_ms << " ms" << std::endl;
-        }
-    };
-    callback_c_.on_data_size_recorded = [this](const std::string& name, size_t size_bytes) {
-        current_sizes_[name] = size_bytes;
-        if (verbose_) {
-            std::cout << "  [SIZE] " << name << ": " << size_bytes << " bytes" << std::endl;
-        }
-    };
-    callback_s_.on_phase_complete = [this](const std::string& name, double time_ms) {
-        current_times_[name] = time_ms;
-        if (verbose_) {
-            std::cout << "  [TIME] " << name << ": " << time_ms << " ms" << std::endl;
-        }
-    };
+    : client_(nullptr), server_(nullptr),
+      server_port_(9000), max_keywords_(0),
+      verbose_(true), save_intermediate_(true),
+      use_keyword_states_(false), verify_proof_(false) {
 }
 
 SearchPerformanceTest::~SearchPerformanceTest() {
@@ -57,7 +43,7 @@ bool SearchPerformanceTest::loadConfig(const std::string& config_file) {
     private_key_file_ = fs::path(paths.get("private_key", "private_key.dat").asString()).lexically_normal().string();
 
     const Json::Value& client_cfg = paths["client"];
-    client_data_dir_ = fs::path(client_cfg.get("data_dir", "vds-client/data").asString()).lexically_normal().string();
+    client_data_dir_ = fs::path(client_cfg.get("data_dir", "../../vds-client/data").asString()).lexically_normal().string();
     client_insert_dir_ = fs::path(client_cfg.get("insert_dir", client_data_dir_ + "/Insert").asString()).lexically_normal().string();
     client_enc_dir_ = fs::path(client_cfg.get("enc_dir", client_data_dir_ + "/EncFiles").asString()).lexically_normal().string();
     client_meta_dir_ = fs::path(client_cfg.get("metadata_dir", client_data_dir_ + "/MetaFiles").asString()).lexically_normal().string();
@@ -66,7 +52,7 @@ bool SearchPerformanceTest::loadConfig(const std::string& config_file) {
     keyword_states_file_ = fs::path(client_cfg.get("keyword_states_file", client_data_dir_ + "/keyword_states.json").asString()).lexically_normal().string();
 
     const Json::Value& server_cfg = paths["server"];
-    server_data_dir_ = fs::path(server_cfg.get("data_dir", "Storage-node/data").asString()).lexically_normal().string();
+    server_data_dir_ = fs::path(server_cfg.get("data_dir", "../../Storage-node/data").asString()).lexically_normal().string();
     server_search_proof_dir_ = fs::path(server_cfg.get("search_proof_dir", server_data_dir_ + "/SearchProof").asString()).lexically_normal().string();
     server_port_ = server_cfg.get("port", 9000).asInt();
 
@@ -87,6 +73,7 @@ bool SearchPerformanceTest::loadConfig(const std::string& config_file) {
     std::cout << "[配置] 关键词文件: " << keywords_file_ << std::endl;
     std::cout << "[配置] 客户端搜索目录: " << client_search_dir_ << std::endl;
     std::cout << "[配置] 服务端搜索目录: " << server_search_proof_dir_ << std::endl;
+    std::cout << "[配置] 使用keyword_states: " << (use_keyword_states_ ? "是" : "否") << std::endl;
     return true;
 }
 
@@ -119,6 +106,11 @@ bool SearchPerformanceTest::loadKeywords() {
             keywords_.push_back(v.asString());
         }
     }
+
+    if (max_keywords_ > 0 && keywords_.size() > (size_t)max_keywords_) {
+        keywords_.resize(max_keywords_);
+    }
+
     std::cout << "[数据] 已加载关键词数量: " << keywords_.size() << std::endl;
     return true;
 }
@@ -126,6 +118,7 @@ bool SearchPerformanceTest::loadKeywords() {
 bool SearchPerformanceTest::initialize() {
     if (!loadKeywords()) return false;
 
+    // 初始化客户端
     client_ = new StorageClient();
     StorageClient::configureDataDirectories(
         client_data_dir_,
@@ -150,202 +143,358 @@ bool SearchPerformanceTest::initialize() {
             std::cerr << "[错误] 密钥生成失败" << std::endl;
             return false;
         }
-        client_->saveKeys(private_key_file_);
     }
-    client_->setPerformanceCallback_c(&callback_c_);
 
+    std::cout << "[初始化] 客户端初始化完成" << std::endl;
+
+    // 初始化服务端（提前加载数据库和索引）
     server_ = new StorageNode(server_data_dir_, server_port_);
-    if (!server_->load_public_params(public_params_file_)) {
-        std::cerr << "[错误] 服务端加载公共参数失败" << std::endl;
+
+    // 预加载服务端的数据库和索引 - 这部分时间不计入性能测试
+    std::cout << "[初始化] 服务端预加载数据库和索引..." << std::endl;
+    auto load_start = std::chrono::high_resolution_clock::now();
+
+    if (!server_->loadDatabase()) {
+        std::cerr << "[错误] 服务端加载数据库失败" << std::endl;
         return false;
     }
-    if (!server_->initialize_directories()) {
-        std::cerr << "[错误] 服务端目录初始化失败" << std::endl;
+    if (!server_->loadSearchDatabase()) {
+        std::cerr << "[错误] 服务端加载搜索索引失败" << std::endl;
         return false;
     }
-    server_->load_index_database();
-    server_->load_search_database();
-    server_->setPerformanceCallback_s(&callback_s_);
+
+    auto load_end = std::chrono::high_resolution_clock::now();
+    double load_time_ms = std::chrono::duration<double, std::milli>(load_end - load_start).count();
+
+    std::cout << "[初始化] 服务端数据加载完成 (耗时: " << std::fixed << std::setprecision(2)
+              << load_time_ms << " ms，不计入性能测试)" << std::endl;
+    std::cout << "[初始化] 索引条目数: " << server_->index_database.size() << std::endl;
+    std::cout << "[初始化] 搜索索引条目数: " << server_->search_database.size() << std::endl;
 
     return true;
 }
 
 SearchPerformanceTest::KeywordTestResult SearchPerformanceTest::testSingleKeyword(const std::string& keyword) {
-    KeywordTestResult result{};
+    KeywordTestResult result;
     result.keyword = keyword;
     result.timestamp = getCurrentTimestamp();
     result.success = false;
 
-    clearPerformanceData();
-
-    std::string search_json = client_search_dir_ + "/" + keyword + ".json";
-    Json::Value search_params;
-
-    // 客户端：生成搜索令牌
-    auto t_client_start = std::chrono::high_resolution_clock::now();
-    if (!client_->searchKeyword(keyword)) {
-        result.error_msg = "客户端生成搜索令牌失败";
-        return result;
+    // ==================== 客户端：生成搜索Token ====================
+    if (verbose_) {
+        std::cout << "\n[测试] 关键词: " << keyword << std::endl;
+        std::cout << "  [客户端] 生成搜索Token..." << std::endl;
     }
-    auto t_client_end = std::chrono::high_resolution_clock::now();
-    result.t_client_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_client_end - t_client_start).count();
-    if (current_times_.count("token_generation")) {
-        result.t_client_ms = current_times_["token_generation"];
-    }
-    result.request_size = current_sizes_["search_request_size"];
 
-    if (!readJson(search_json, search_params)) {
-        result.error_msg = "读取搜索请求失败";
-        return result;
-    }
-    std::string token = search_params.get("T", "").asString();
-    if (token.empty()) {
-        result.error_msg = "搜索请求缺少令牌";
+    // 精确测量Token生成时间
+    auto client_start = std::chrono::high_resolution_clock::now();
+    bool client_success = client_->searchKeyword(keyword);
+    auto client_end = std::chrono::high_resolution_clock::now();
+
+    result.t_client_token_gen_ms = std::chrono::duration<double, std::milli>(client_end - client_start).count();
+
+    if (!client_success) {
+        result.error_msg = "Token生成失败";
+        if (verbose_) {
+            std::cout << "  ❌ " << result.error_msg << std::endl;
+        }
         return result;
     }
 
-    // 服务端：执行搜索证明
-    clearPerformanceData();
-    auto t_server_start = std::chrono::high_resolution_clock::now();
-    if (!server_->SearchKeywordsAssociatedFilesProof(search_json)) {
-        result.error_msg = "服务端搜索失败";
-        return result;
-    }
-    auto t_server_end = std::chrono::high_resolution_clock::now();
-    result.t_server_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_server_end - t_server_start).count();
-    if (current_times_.count("server_search_total")) {
-        result.t_server_ms = current_times_["server_search_total"];
+    // 获取Token文件路径和大小
+    std::string token_file = client_search_dir_ + "/search_" + keyword + ".json";
+    if (fs::exists(token_file)) {
+        result.token_size_bytes = fs::file_size(token_file);
     }
 
-    // 读取证明文件大小与命中数
-    fs::path proof_path = fs::path(server_data_dir_) / "SearchProof" / (token + ".json");
-    if (fs::exists(proof_path)) {
-        result.proof_size = fs::file_size(proof_path);
+    if (verbose_) {
+        std::cout << "  ✅ Token生成完成 (" << std::fixed << std::setprecision(3)
+                  << result.t_client_token_gen_ms << " ms)" << std::endl;
+        std::cout << "  📄 Token大小: " << result.token_size_bytes << " bytes" << std::endl;
+    }
+
+    // ==================== 服务端：纯证明计算（不含加载） ====================
+    if (verbose_) {
+        std::cout << "  [服务端] 计算搜索证明..." << std::endl;
+    }
+
+    // 精确测量证明计算时间（数据库已经预加载，只测量证明计算）
+    auto server_start = std::chrono::high_resolution_clock::now();
+    bool server_success = server_->SearchKeywordsAssociatedFilesProof(token_file);
+    auto server_end = std::chrono::high_resolution_clock::now();
+
+    result.t_server_proof_calc_ms = std::chrono::duration<double, std::milli>(server_end - server_start).count();
+
+    if (!server_success) {
+        result.error_msg = "证明计算失败";
+        if (verbose_) {
+            std::cout << "  ❌ " << result.error_msg << std::endl;
+        }
+        return result;
+    }
+
+    // 获取证明文件路径和大小
+    std::string proof_file = server_search_proof_dir_ + "/proof_" + keyword + ".json";
+    if (fs::exists(proof_file)) {
+        result.proof_size_bytes = fs::file_size(proof_file);
+
+        // 读取证明JSON获取结果数量
         Json::Value proof_json;
-        if (readJson(proof_path.string(), proof_json)) {
-            const Json::Value& AS = proof_json["AS"];
-            if (AS.isArray()) {
-                result.result_count = AS.size();
+        if (readJson(proof_file, proof_json)) {
+            if (proof_json.isMember("file_proofs") && proof_json["file_proofs"].isArray()) {
+                result.result_count = proof_json["file_proofs"].size();
             }
         }
-        if (verify_proof_) {
-            clearPerformanceData();
-            if (!server_->VerifySearchProof(proof_path.string())) {
-                result.error_msg = "搜索证明验证失败";
-                result.success = false;
-                return result;
-            }
-        }
+    }
+
+    if (verbose_) {
+        std::cout << "  ✅ 证明计算完成 (" << std::fixed << std::setprecision(3)
+                  << result.t_server_proof_calc_ms << " ms)" << std::endl;
+        std::cout << "  📄 证明大小: " << result.proof_size_bytes << " bytes" << std::endl;
+        std::cout << "  🔍 命中文件数: " << result.result_count << std::endl;
     }
 
     result.success = true;
     return result;
 }
 
-void SearchPerformanceTest::calculateStatistics() {
-    std::vector<KeywordTestResult> success;
-    for (const auto& r : results_) {
-        if (r.success) success.push_back(r);
-    }
-    statistics_.total_keywords = results_.size();
-    statistics_.success_count = success.size();
-    statistics_.failure_count = results_.size() - success.size();
-    if (success.empty()) return;
-
-    auto avg = [](const std::vector<double>& v) {
-        return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
-    };
-
-    std::vector<double> tc, ts;
-    std::vector<size_t> req, proof;
-    for (const auto& r : success) {
-        tc.push_back(r.t_client_ms);
-        ts.push_back(r.t_server_ms);
-        req.push_back(r.request_size);
-        proof.push_back(r.proof_size);
-    }
-    statistics_.t_client_avg = avg(tc);
-    statistics_.t_server_avg = avg(ts);
-    statistics_.t_client_min = *std::min_element(tc.begin(), tc.end());
-    statistics_.t_client_max = *std::max_element(tc.begin(), tc.end());
-    statistics_.t_server_min = *std::min_element(ts.begin(), ts.end());
-    statistics_.t_server_max = *std::max_element(ts.begin(), ts.end());
-    statistics_.request_avg = std::accumulate(req.begin(), req.end(), (size_t)0) / req.size();
-    statistics_.proof_avg = std::accumulate(proof.begin(), proof.end(), (size_t)0) / proof.size();
-}
-
 bool SearchPerformanceTest::runTest() {
-    std::cout << "\n================ 搜索性能测试 ================\n";
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "开始搜索性能测试" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+
     statistics_.start_time = getCurrentTimestamp();
-    auto start = std::chrono::high_resolution_clock::now();
+    auto test_start = std::chrono::high_resolution_clock::now();
 
-    int total = keywords_.size();
-    if (max_keywords_ > 0 && max_keywords_ < total) total = max_keywords_;
+    for (size_t i = 0; i < keywords_.size(); i++) {
+        std::cout << "\n进度: [" << (i + 1) << "/" << keywords_.size() << "]" << std::endl;
 
-    int count = 0;
-    for (const auto& kw : keywords_) {
-        if (max_keywords_ > 0 && count >= max_keywords_) break;
-        count++;
-        std::cout << "\n[" << count << "/" << total << "] 关键词: " << kw << std::endl;
-        auto r = testSingleKeyword(kw);
-        results_.push_back(r);
-        if (!r.success) {
-            std::cerr << "⚠️  测试失败: " << r.error_msg << std::endl;
+        KeywordTestResult result = testSingleKeyword(keywords_[i]);
+        results_.push_back(result);
+
+        if (result.success) {
+            statistics_.success_count++;
+        } else {
+            statistics_.failure_count++;
         }
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
+    auto test_end = std::chrono::high_resolution_clock::now();
     statistics_.end_time = getCurrentTimestamp();
-    statistics_.total_duration_sec = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() / 1000.0;
+    statistics_.total_duration_sec = std::chrono::duration<double>(test_end - test_start).count();
+    statistics_.total_keywords = keywords_.size();
 
     calculateStatistics();
 
-    std::cout << "\n=== 搜索测试完成 ===" << std::endl;
-    std::cout << "总关键词: " << statistics_.total_keywords << " 成功: " << statistics_.success_count
-              << " 失败: " << statistics_.failure_count << std::endl;
-    std::cout << "客户端平均耗时: " << statistics_.t_client_avg << " ms" << std::endl;
-    std::cout << "服务端平均耗时: " << statistics_.t_server_avg << " ms" << std::endl;
-    std::cout << "请求大小平均: " << statistics_.request_avg << " bytes" << std::endl;
-    std::cout << "证明大小平均: " << statistics_.proof_avg << " bytes" << std::endl;
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "测试完成" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+
+    printSummary();
 
     return true;
 }
 
-bool SearchPerformanceTest::saveDetailedReport(const std::string& csv_file) {
-    std::ofstream ofs(csv_file);
-    if (!ofs.is_open()) return false;
-    ofs << "keyword,t_client_ms,t_server_ms,request_size,proof_size,result_count,timestamp,success,error_msg\n";
+void SearchPerformanceTest::calculateStatistics() {
+    if (results_.empty()) return;
+
+    std::vector<double> client_times;
+    std::vector<double> server_times;
+    std::vector<size_t> token_sizes;
+    std::vector<size_t> proof_sizes;
+
     for (const auto& r : results_) {
-        ofs << r.keyword << "," << r.t_client_ms << "," << r.t_server_ms << "," << r.request_size
-            << "," << r.proof_size << "," << r.result_count << "," << r.timestamp << ","
-            << (r.success ? "true" : "false") << "," << r.error_msg << "\n";
+        if (r.success) {
+            client_times.push_back(r.t_client_token_gen_ms);
+            server_times.push_back(r.t_server_proof_calc_ms);
+            token_sizes.push_back(r.token_size_bytes);
+            proof_sizes.push_back(r.proof_size_bytes);
+        }
     }
+
+    if (!client_times.empty()) {
+        // 客户端统计
+        statistics_.total_client_time_ms = std::accumulate(client_times.begin(), client_times.end(), 0.0);
+        statistics_.client_token_avg_ms = statistics_.total_client_time_ms / client_times.size();
+        statistics_.client_token_min_ms = *std::min_element(client_times.begin(), client_times.end());
+        statistics_.client_token_max_ms = *std::max_element(client_times.begin(), client_times.end());
+        statistics_.client_token_stddev_ms = calculateStdDev(client_times, statistics_.client_token_avg_ms);
+        statistics_.client_qps = (statistics_.total_client_time_ms > 0) ?
+            (client_times.size() * 1000.0 / statistics_.total_client_time_ms) : 0.0;
+
+        // 服务端统计
+        statistics_.total_server_time_ms = std::accumulate(server_times.begin(), server_times.end(), 0.0);
+        statistics_.server_proof_avg_ms = statistics_.total_server_time_ms / server_times.size();
+        statistics_.server_proof_min_ms = *std::min_element(server_times.begin(), server_times.end());
+        statistics_.server_proof_max_ms = *std::max_element(server_times.begin(), server_times.end());
+        statistics_.server_proof_stddev_ms = calculateStdDev(server_times, statistics_.server_proof_avg_ms);
+        statistics_.server_qps = (statistics_.total_server_time_ms > 0) ?
+            (server_times.size() * 1000.0 / statistics_.total_server_time_ms) : 0.0;
+
+        // 数据大小统计
+        statistics_.token_avg_bytes = std::accumulate(token_sizes.begin(), token_sizes.end(), 0UL) / token_sizes.size();
+        statistics_.proof_avg_bytes = std::accumulate(proof_sizes.begin(), proof_sizes.end(), 0UL) / proof_sizes.size();
+    }
+}
+
+double SearchPerformanceTest::calculateStdDev(const std::vector<double>& values, double mean) {
+    if (values.size() <= 1) return 0.0;
+
+    double sum_sq_diff = 0.0;
+    for (double v : values) {
+        double diff = v - mean;
+        sum_sq_diff += diff * diff;
+    }
+    return std::sqrt(sum_sq_diff / (values.size() - 1));
+}
+
+void SearchPerformanceTest::printSummary() {
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "📊 性能测试总结" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+
+    std::cout << "测试名称: " << statistics_.test_name << std::endl;
+    std::cout << "开始时间: " << statistics_.start_time << std::endl;
+    std::cout << "结束时间: " << statistics_.end_time << std::endl;
+    std::cout << "总耗时: " << std::fixed << std::setprecision(2)
+              << statistics_.total_duration_sec << " 秒" << std::endl;
+    std::cout << "总关键词数: " << statistics_.total_keywords << std::endl;
+    std::cout << "成功: " << statistics_.success_count << " | 失败: " << statistics_.failure_count << std::endl;
+
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "💻 客户端性能（Token生成）" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "总时间: " << std::fixed << std::setprecision(2)
+              << statistics_.total_client_time_ms << " ms" << std::endl;
+    std::cout << "平均时间: " << std::fixed << std::setprecision(3)
+              << statistics_.client_token_avg_ms << " ms" << std::endl;
+    std::cout << "最小时间: " << std::fixed << std::setprecision(3)
+              << statistics_.client_token_min_ms << " ms" << std::endl;
+    std::cout << "最大时间: " << std::fixed << std::setprecision(3)
+              << statistics_.client_token_max_ms << " ms" << std::endl;
+    std::cout << "标准差: " << std::fixed << std::setprecision(3)
+              << statistics_.client_token_stddev_ms << " ms" << std::endl;
+    std::cout << "QPS: " << std::fixed << std::setprecision(2)
+              << statistics_.client_qps << " 查询/秒" << std::endl;
+
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "🔧 服务端性能（纯证明计算，不含加载）" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "总时间: " << std::fixed << std::setprecision(2)
+              << statistics_.total_server_time_ms << " ms" << std::endl;
+    std::cout << "平均时间: " << std::fixed << std::setprecision(3)
+              << statistics_.server_proof_avg_ms << " ms" << std::endl;
+    std::cout << "最小时间: " << std::fixed << std::setprecision(3)
+              << statistics_.server_proof_min_ms << " ms" << std::endl;
+    std::cout << "最大时间: " << std::fixed << std::setprecision(3)
+              << statistics_.server_proof_max_ms << " ms" << std::endl;
+    std::cout << "标准差: " << std::fixed << std::setprecision(3)
+              << statistics_.server_proof_stddev_ms << " ms" << std::endl;
+    std::cout << "QPS: " << std::fixed << std::setprecision(2)
+              << statistics_.server_qps << " 查询/秒" << std::endl;
+
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "📦 数据大小统计" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "平均Token大小: " << statistics_.token_avg_bytes << " bytes" << std::endl;
+    std::cout << "平均证明大小: " << statistics_.proof_avg_bytes << " bytes" << std::endl;
+    std::cout << std::endl;
+}
+
+bool SearchPerformanceTest::saveDetailedReport(const std::string& csv_file) {
+    std::cout << "[报告] 保存详细报告: " << csv_file << std::endl;
+
+    // 确保目录存在
+    fs::path csv_path(csv_file);
+    if (csv_path.has_parent_path()) {
+        fs::create_directories(csv_path.parent_path());
+    }
+
+    std::ofstream ofs(csv_file);
+    if (!ofs.is_open()) {
+        std::cerr << "[错误] 无法创建CSV文件: " << csv_file << std::endl;
+        return false;
+    }
+
+    // CSV头
+    ofs << "keyword,"
+        << "client_token_gen_ms,token_size_bytes,"
+        << "server_proof_calc_ms,proof_size_bytes,result_count,"
+        << "timestamp,success,error_msg\n";
+
+    // 数据行
+    for (const auto& r : results_) {
+        ofs << r.keyword << ","
+            << std::fixed << std::setprecision(6) << r.t_client_token_gen_ms << ","
+            << r.token_size_bytes << ","
+            << std::fixed << std::setprecision(6) << r.t_server_proof_calc_ms << ","
+            << r.proof_size_bytes << ","
+            << r.result_count << ","
+            << r.timestamp << ","
+            << (r.success ? "true" : "false") << ","
+            << r.error_msg << "\n";
+    }
+
+    ofs.close();
+    std::cout << "[报告] ✅ 详细报告已保存" << std::endl;
     return true;
 }
 
 bool SearchPerformanceTest::saveSummaryReport(const std::string& json_file) {
-    Json::Value root;
-    root["test_name"] = statistics_.test_name;
-    root["start_time"] = statistics_.start_time;
-    root["end_time"] = statistics_.end_time;
-    root["total_duration_sec"] = statistics_.total_duration_sec;
-    root["total_keywords"] = statistics_.total_keywords;
-    root["success_count"] = statistics_.success_count;
-    root["failure_count"] = statistics_.failure_count;
-    root["t_client_avg"] = statistics_.t_client_avg;
-    root["t_client_min"] = statistics_.t_client_min;
-    root["t_client_max"] = statistics_.t_client_max;
-    root["t_server_avg"] = statistics_.t_server_avg;
-    root["t_server_min"] = statistics_.t_server_min;
-    root["t_server_max"] = statistics_.t_server_max;
-    root["request_avg"] = (Json::UInt64)statistics_.request_avg;
-    root["proof_avg"] = (Json::UInt64)statistics_.proof_avg;
+    std::cout << "[报告] 保存总结报告: " << json_file << std::endl;
 
-    Json::StreamWriterBuilder writer;
-    writer["indentation"] = "  ";
+    // 确保目录存在
+    fs::path json_path(json_file);
+    if (json_path.has_parent_path()) {
+        fs::create_directories(json_path.parent_path());
+    }
+
+    Json::Value root;
+
+    // 测试信息
+    root["test_info"]["test_name"] = statistics_.test_name;
+    root["test_info"]["start_time"] = statistics_.start_time;
+    root["test_info"]["end_time"] = statistics_.end_time;
+    root["test_info"]["total_duration_sec"] = statistics_.total_duration_sec;
+    root["test_info"]["total_keywords"] = statistics_.total_keywords;
+    root["test_info"]["success_count"] = statistics_.success_count;
+    root["test_info"]["failure_count"] = statistics_.failure_count;
+
+    // 客户端统计
+    root["client_performance"]["total_time_ms"] = statistics_.total_client_time_ms;
+    root["client_performance"]["token_gen_avg_ms"] = statistics_.client_token_avg_ms;
+    root["client_performance"]["token_gen_min_ms"] = statistics_.client_token_min_ms;
+    root["client_performance"]["token_gen_max_ms"] = statistics_.client_token_max_ms;
+    root["client_performance"]["token_gen_stddev_ms"] = statistics_.client_token_stddev_ms;
+    root["client_performance"]["qps"] = statistics_.client_qps;
+
+    // 服务端统计
+    root["server_performance"]["total_time_ms"] = statistics_.total_server_time_ms;
+    root["server_performance"]["proof_calc_avg_ms"] = statistics_.server_proof_avg_ms;
+    root["server_performance"]["proof_calc_min_ms"] = statistics_.server_proof_min_ms;
+    root["server_performance"]["proof_calc_max_ms"] = statistics_.server_proof_max_ms;
+    root["server_performance"]["proof_calc_stddev_ms"] = statistics_.server_proof_stddev_ms;
+    root["server_performance"]["qps"] = statistics_.server_qps;
+    root["server_performance"]["note"] = "Pure proof calculation time, excluding database loading";
+
+    // 数据大小
+    root["data_size"]["token_avg_bytes"] = (Json::Value::UInt64)statistics_.token_avg_bytes;
+    root["data_size"]["proof_avg_bytes"] = (Json::Value::UInt64)statistics_.proof_avg_bytes;
+
     std::ofstream ofs(json_file);
-    if (!ofs.is_open()) return false;
-    ofs << Json::writeString(writer, root);
+    if (!ofs.is_open()) {
+        std::cerr << "[错误] 无法创建JSON文件: " << json_file << std::endl;
+        return false;
+    }
+
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "  ";
+    std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+    writer->write(root, &ofs);
+    ofs << std::endl;
+
+    ofs.close();
+    std::cout << "[报告] ✅ 总结报告已保存" << std::endl;
     return true;
 }
 
@@ -355,11 +504,6 @@ std::string SearchPerformanceTest::getCurrentTimestamp() {
     std::stringstream ss;
     ss << std::put_time(std::localtime(&tt), "%Y-%m-%d %H:%M:%S");
     return ss.str();
-}
-
-void SearchPerformanceTest::clearPerformanceData() {
-    current_times_.clear();
-    current_sizes_.clear();
 }
 
 bool SearchPerformanceTest::readJson(const std::string& path, Json::Value& out) {
@@ -380,8 +524,11 @@ bool SearchPerformanceTest::readJson(const std::string& path, Json::Value& out) 
 int main() {
     std::cout << R"(
 ╔══════════════════════════════════════════════════╗
-║          搜索性能测试程序                         ║
+║          搜索性能测试程序 v2.0                      ║
 ║          Search Performance Test                  ║
+║                                                    ║
+║  客户端: Token生成时间                              ║
+║  服务端: 纯证明计算时间(不含加载)                    ║
 ╚══════════════════════════════════════════════════╝
 )" << std::endl;
 

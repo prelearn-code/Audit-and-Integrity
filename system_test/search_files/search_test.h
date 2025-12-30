@@ -16,34 +16,60 @@
 
 class SearchPerformanceTest {
 public:
+    /**
+     * @brief 单个关键词的测试结果
+     */
     struct KeywordTestResult {
         std::string keyword;
-        double t_client_ms;    // 令牌生成时间
-        double t_server_ms;    // 服务端搜索时间
-        size_t request_size;   // 请求JSON大小
-        size_t proof_size;     // 证明JSON大小
-        size_t result_count;   // 命中文件数
+
+        // 客户端性能指标
+        double t_client_token_gen_ms;     // 客户端：Token生成时间（毫秒）
+        size_t token_size_bytes;           // Token大小（字节）
+
+        // 服务端性能指标
+        double t_server_proof_calc_ms;    // 服务端：纯证明计算时间（毫秒，不含加载）
+        size_t proof_size_bytes;           // 证明大小（字节）
+        size_t result_count;               // 命中文件数
+
         std::string timestamp;
         bool success;
         std::string error_msg;
     };
 
+    /**
+     * @brief 测试统计数据
+     */
     struct TestStatistics {
         std::string test_name;
         std::string start_time;
         std::string end_time;
-        double total_duration_sec;
+        double total_duration_sec;        // 总测试时长（秒）
+
         int total_keywords;
         int success_count;
         int failure_count;
-        double t_client_avg;
-        double t_client_min;
-        double t_client_max;
-        double t_server_avg;
-        double t_server_min;
-        double t_server_max;
-        size_t request_avg;
-        size_t proof_avg;
+
+        // 客户端统计
+        double total_client_time_ms;      // 所有Token生成的总时间（毫秒）
+        double client_token_avg_ms;       // 单个Token平均生成时间
+        double client_token_min_ms;       // 最小Token生成时间
+        double client_token_max_ms;       // 最大Token生成时间
+        double client_token_stddev_ms;    // Token生成时间标准差
+
+        // 服务端统计
+        double total_server_time_ms;      // 所有证明计算的总时间（毫秒）
+        double server_proof_avg_ms;       // 单个证明平均计算时间
+        double server_proof_min_ms;       // 最小证明计算时间
+        double server_proof_max_ms;       // 最大证明计算时间
+        double server_proof_stddev_ms;    // 证明计算时间标准差
+
+        // 数据大小统计
+        size_t token_avg_bytes;
+        size_t proof_avg_bytes;
+
+        // 吞吐量统计
+        double client_qps;                // 客户端每秒查询数 (基于token生成时间)
+        double server_qps;                // 服务端每秒查询数 (基于证明计算时间)
     };
 
     SearchPerformanceTest();
@@ -54,6 +80,7 @@ public:
     bool runTest();
     bool saveDetailedReport(const std::string& csv_file);
     bool saveSummaryReport(const std::string& json_file);
+    void printSummary();
 
 private:
     // 配置
@@ -79,22 +106,18 @@ private:
     // 组件
     StorageClient* client_;
     StorageNode* server_;
-    PerformanceCallback_c callback_c_;
-    PerformanceCallback_s callback_s_;
 
     // 数据
     std::vector<std::string> keywords_;
     std::vector<KeywordTestResult> results_;
     TestStatistics statistics_{};
-    std::map<std::string, double> current_times_;
-    std::map<std::string, size_t> current_sizes_;
 
     // 内部方法
     bool loadKeywords();
     KeywordTestResult testSingleKeyword(const std::string& keyword);
     void calculateStatistics();
+    double calculateStdDev(const std::vector<double>& values, double mean);
     std::string getCurrentTimestamp();
-    void clearPerformanceData();
     bool readJson(const std::string& path, Json::Value& out);
 };
 
