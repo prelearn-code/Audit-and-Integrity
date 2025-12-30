@@ -187,6 +187,16 @@
         "cwd": "${workspaceFolder}"
       },
       "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "run:proof_verify_performance",
+      "type": "shell",
+      "dependsOn": "build:proof_verify_performance",
+      "command": "${workspaceFolder}/bin/proof_verify_performance",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
     }
   ]
 }
