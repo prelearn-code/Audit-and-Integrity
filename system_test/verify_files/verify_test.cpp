@@ -132,12 +132,12 @@ bool VerifyPerformanceTest::initialize() {
     std::cout << "[初始化] 服务端预加载数据库和索引..." << std::endl;
     auto load_start = std::chrono::high_resolution_clock::now();
 
-    if (!server_->loadDatabase()) {
-        std::cerr << "[错误] 服务端加载数据库失败" << std::endl;
+    if (!server_->load_index_database()) {
+        std::cerr << "[错误] 服务端加载索引数据库失败" << std::endl;
         return false;
     }
-    if (!server_->loadSearchDatabase()) {
-        std::cerr << "[错误] 服务端加载搜索索引失败" << std::endl;
+    if (!server_->load_search_database()) {
+        std::cerr << "[错误] 服务端加载搜索数据库失败" << std::endl;
         return false;
     }
 
