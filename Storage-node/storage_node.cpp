@@ -1819,7 +1819,6 @@ bool StorageNode::GetFileProof(const std::string& ID_F) {
 }
 
 bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
-    ScopedTimerServer timer(perf_callback_s, "server_search_verify_total");
     std::cout << "\n🔍 验证搜索证明..." << std::endl;
     
     // ========== 步骤1：加载输入JSON ==========
@@ -1866,6 +1865,9 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
         std::cerr << "❌ 索引数据库加载失败" << std::endl;
         return false;
     }
+
+    // 仅对验证计算过程计时（不含文件/DB加载）
+    ScopedTimerServer timer(perf_callback_s, "server_search_verify_total");
     
     // 获取第一个文件的索引信息（用于获取n和PK）
     if (AS.empty()) {
