@@ -42,6 +42,8 @@ public:
         double t_server_avg;
         double t_server_min;
         double t_server_max;
+        double t_client_total;
+        double t_server_total;
         size_t request_avg;
         size_t proof_avg;
     };

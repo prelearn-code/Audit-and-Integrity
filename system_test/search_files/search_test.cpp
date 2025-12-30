@@ -270,6 +270,8 @@ void SearchPerformanceTest::calculateStatistics() {
     statistics_.t_client_max = *std::max_element(tc.begin(), tc.end());
     statistics_.t_server_min = *std::min_element(ts.begin(), ts.end());
     statistics_.t_server_max = *std::max_element(ts.begin(), ts.end());
+    statistics_.t_client_total = std::accumulate(tc.begin(), tc.end(), 0.0);
+    statistics_.t_server_total = std::accumulate(ts.begin(), ts.end(), 0.0);
     statistics_.request_avg = std::accumulate(req.begin(), req.end(), (size_t)0) / req.size();
     statistics_.proof_avg = std::accumulate(proof.begin(), proof.end(), (size_t)0) / proof.size();
 }
@@ -338,6 +340,8 @@ bool SearchPerformanceTest::saveSummaryReport(const std::string& json_file) {
     root["t_server_avg"] = statistics_.t_server_avg;
     root["t_server_min"] = statistics_.t_server_min;
     root["t_server_max"] = statistics_.t_server_max;
+    root["t_client_total"] = statistics_.t_client_total;
+    root["t_server_total"] = statistics_.t_server_total;
     root["request_avg"] = (Json::UInt64)statistics_.request_avg;
     root["proof_avg"] = (Json::UInt64)statistics_.proof_avg;
 

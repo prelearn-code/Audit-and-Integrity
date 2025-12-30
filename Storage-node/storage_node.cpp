@@ -1265,7 +1265,6 @@ bool StorageNode::delete_file_from_json(const std::string& delete_json_path) {
 }
 
 bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_json_path) {
-    ScopedTimerServer timer(perf_callback_s, "server_search_total");
     std::cout << "\n🔍 执行关键词关联文件证明搜索..." << std::endl;
     
     // ========== 步骤1: 系统初始化 ==========
@@ -1327,6 +1326,9 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
     // 新增：生成随机种子（在循环开始前生成一次）
     std::string search_seed = generate_random_seed();
     std::cout << "   生成搜索种子: " << search_seed.substr(0, 16) << "..." << std::endl;
+
+    // 用于统计计算证明时间（不计入数据库/文件读取）
+    double compute_ms_total = 0.0;
     
     // ========== 步骤4: 主搜索循环 ==========
     
@@ -1411,13 +1413,15 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
             
             std::cout << "   块数量: " << n << std::endl;
             
-            // 加载密文文件
+            // 加载密文文件（不计入计时）
             std::string ciphertext;
             if (!load_encrypted_file(ID_F, ciphertext)) {
                 std::cerr << "❌ 无法加载密文文件: " << ID_F << std::endl;
                 st_alpha = st_alpha_next;
                 continue;
             }
+            
+            auto proof_start = std::chrono::high_resolution_clock::now();
             
             // 使用在步骤3中生成的search_seed
             std::string seed = search_seed;
@@ -1527,6 +1531,9 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
             PS.push_back(temp_result);
             
             std::cout << "   ✅ 证明生成完成" << std::endl;
+
+            auto proof_end = std::chrono::high_resolution_clock::now();
+            compute_ms_total += std::chrono::duration<double, std::milli>(proof_end - proof_start).count();
         } else {
             std::cout << "   ⚠️  文件状态为 invalid，跳过证明生成" << std::endl;
         }
@@ -1591,6 +1598,10 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
     std::cout << "   输出文件: " << output_path << std::endl;
     std::cout << "   涉及文件数: " << AS.size() << std::endl;
     std::cout << "   有效证明数: " << PS.size() << std::endl;
+
+    if (perf_callback_s) {
+        perf_callback_s->on_phase_complete("server_search_total", compute_ms_total);
+    }
     
     // 新增：清理资源
     element_clear(global_phi);
