@@ -10,6 +10,9 @@ ProofVerifyPerformanceTest::ProofVerifyPerformanceTest()
         if (verbose_) {
             std::cout << "  [TIME] " << name << ": " << time_ms << " ms" << std::endl;
         }
+        if (name == "server_search_verify_total") {
+            last_server_verify_ms_ = time_ms;
+        }
     };
 }
 
@@ -86,14 +89,13 @@ ProofVerifyPerformanceTest::VerifyResult ProofVerifyPerformanceTest::verifySingl
     r.proof_file = proof_path;
     r.timestamp = getCurrentTimestamp();
 
-    auto start = std::chrono::high_resolution_clock::now();
+    last_server_verify_ms_ = 0.0;
     if (!server_->VerifySearchProof(proof_path)) {
         r.error_msg = "验证失败";
         r.success = false;
         return r;
     }
-    auto end = std::chrono::high_resolution_clock::now();
-    r.t_server_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    r.t_server_ms = last_server_verify_ms_;
     r.success = true;
     return r;
 }

@@ -51,6 +51,7 @@ private:
     std::string proof_dir_;
     int max_proofs_;
     bool verbose_;
+    double last_server_verify_ms_{0.0};
 
     StorageNode* server_;
     PerformanceCallback_s callback_s_;
