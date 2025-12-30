@@ -202,7 +202,7 @@ SearchPerformanceTest::KeywordTestResult SearchPerformanceTest::testSingleKeywor
     }
 
     // 获取Token文件路径和大小
-    std::string token_file = client_search_dir_ + "/search_" + keyword + ".json";
+    std::string token_file = client_search_dir_ + "/" + keyword + ".json";
     if (fs::exists(token_file)) {
         result.token_size_bytes = fs::file_size(token_file);
     }
@@ -211,6 +211,13 @@ SearchPerformanceTest::KeywordTestResult SearchPerformanceTest::testSingleKeywor
         std::cout << "  ✅ Token生成完成 (" << std::fixed << std::setprecision(3)
                   << result.t_client_token_gen_ms << " ms)" << std::endl;
         std::cout << "  📄 Token大小: " << result.token_size_bytes << " bytes" << std::endl;
+    }
+
+    // 读取Token以获取T值（用于后续读取证明文件）
+    Json::Value search_params;
+    std::string token_value;
+    if (readJson(token_file, search_params)) {
+        token_value = search_params.get("T", "").asString();
     }
 
     // ==================== 服务端：纯证明计算（不含加载） ====================
@@ -233,16 +240,25 @@ SearchPerformanceTest::KeywordTestResult SearchPerformanceTest::testSingleKeywor
         return result;
     }
 
-    // 获取证明文件路径和大小
-    std::string proof_file = server_search_proof_dir_ + "/proof_" + keyword + ".json";
-    if (fs::exists(proof_file)) {
+    // 获取证明文件路径和大小（使用token值作为文件名）
+    std::string proof_file;
+    if (!token_value.empty()) {
+        proof_file = server_search_proof_dir_ + "/" + token_value + ".json";
+    }
+
+    if (!proof_file.empty() && fs::exists(proof_file)) {
         result.proof_size_bytes = fs::file_size(proof_file);
 
         // 读取证明JSON获取结果数量
         Json::Value proof_json;
         if (readJson(proof_file, proof_json)) {
+            // 尝试新格式 (file_proofs)
             if (proof_json.isMember("file_proofs") && proof_json["file_proofs"].isArray()) {
                 result.result_count = proof_json["file_proofs"].size();
+            }
+            // 尝试旧格式 (AS)
+            else if (proof_json.isMember("AS") && proof_json["AS"].isArray()) {
+                result.result_count = proof_json["AS"].size();
             }
         }
     }
@@ -271,12 +287,9 @@ bool SearchPerformanceTest::cleanupData() {
         int count = 0;
         for (const auto& entry : fs::directory_iterator(client_search_dir_)) {
             if (entry.is_regular_file() && entry.path().extension() == ".json") {
-                std::string filename = entry.path().filename().string();
-                // 只删除搜索token文件 (search_*.json)
-                if (filename.find("search_") == 0) {
-                    fs::remove(entry.path());
-                    count++;
-                }
+                // 删除所有JSON文件（都是搜索token）
+                fs::remove(entry.path());
+                count++;
             }
         }
         std::cout << "  ✅ 删除搜索Token文件: " << count << " 个" << std::endl;
@@ -288,12 +301,9 @@ bool SearchPerformanceTest::cleanupData() {
         int count = 0;
         for (const auto& entry : fs::directory_iterator(server_search_proof_dir_)) {
             if (entry.is_regular_file() && entry.path().extension() == ".json") {
-                std::string filename = entry.path().filename().string();
-                // 只删除证明文件 (proof_*.json)
-                if (filename.find("proof_") == 0) {
-                    fs::remove(entry.path());
-                    count++;
-                }
+                // 删除所有JSON文件（都是证明文件）
+                fs::remove(entry.path());
+                count++;
             }
         }
         std::cout << "  ✅ 删除搜索证明文件: " << count << " 个" << std::endl;
