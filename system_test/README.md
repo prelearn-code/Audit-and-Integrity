@@ -265,7 +265,21 @@ end_to_end_results_20250130_123456/
 - **OpenSSL**: libcrypto - **libssl-dev**
 - **JsonCpp**: JSON 解析库 - **libjsoncpp-dev**
 
-### 安装依赖（Ubuntu/Debian）
+### 一键安装脚本（推荐）
+
+```bash
+# 运行自动安装脚本
+cd system_test
+sudo ./install_dependencies.sh
+```
+
+脚本会自动：
+- 检测系统类型
+- 安装所有必需的开发包
+- 验证安装结果
+- 如果 PBC 库不在标准源，会自动编译安装
+
+### 手动安装（Ubuntu/Debian）
 
 ```bash
 # 安装所有必需的开发包
@@ -274,6 +288,21 @@ sudo apt-get install -y build-essential libpbc-dev libgmp-dev libssl-dev libjson
 
 # 验证安装
 dpkg -l | grep -E "libpbc-dev|libgmp-dev|libssl-dev|libjsoncpp-dev"
+```
+
+**注意**: 如果 `libpbc-dev` 不可用，需要手动编译 PBC 库：
+
+```bash
+# 下载 PBC 库
+wget https://crypto.stanford.edu/pbc/files/pbc-0.5.14.tar.gz
+tar -xzf pbc-0.5.14.tar.gz
+cd pbc-0.5.14
+
+# 编译安装
+./configure
+make
+sudo make install
+sudo ldconfig
 ```
 
 ### 安装依赖（macOS）
