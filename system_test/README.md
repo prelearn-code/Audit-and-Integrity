@@ -255,25 +255,43 @@ end_to_end_results_20250130_123456/
 
 ## ⚙️ 系统要求
 
-### 依赖库
+### 必需的依赖库
+
+**重要**: 编译前必须安装以下开发包（包含头文件和库文件）：
 
 - **C++ 编译器**: g++ (支持 C++17)
-- **PBC 库**: Pairing-Based Cryptography library
-- **GMP 库**: GNU Multiple Precision library
-- **OpenSSL**: libcrypto
-- **JsonCpp**: JSON 解析库
+- **PBC 库**: Pairing-Based Cryptography library - **libpbc-dev**
+- **GMP 库**: GNU Multiple Precision library - **libgmp-dev**
+- **OpenSSL**: libcrypto - **libssl-dev**
+- **JsonCpp**: JSON 解析库 - **libjsoncpp-dev**
 
 ### 安装依赖（Ubuntu/Debian）
 
 ```bash
+# 安装所有必需的开发包
 sudo apt-get update
 sudo apt-get install -y build-essential libpbc-dev libgmp-dev libssl-dev libjsoncpp-dev
+
+# 验证安装
+dpkg -l | grep -E "libpbc-dev|libgmp-dev|libssl-dev|libjsoncpp-dev"
 ```
 
 ### 安装依赖（macOS）
 
 ```bash
 brew install pbc gmp openssl jsoncpp
+```
+
+### 验证环境
+
+```bash
+# 检查编译器
+g++ --version
+
+# 检查头文件
+ls /usr/include/pbc/
+ls /usr/include/gmp.h
+ls /usr/include/json/
 ```
 
 ## 🔧 故障排除
