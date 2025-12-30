@@ -82,6 +82,12 @@ public:
     bool saveSummaryReport(const std::string& json_file);
     void printSummary();
 
+    /**
+     * @brief 清理搜索测试产生的数据
+     * @return 成功返回true
+     */
+    bool cleanupData();
+
 private:
     // 配置
     std::string keywords_file_;

@@ -33,7 +33,7 @@ RESULTS_DIR = results
 # 构建目标
 # ============================================================
 
-.PHONY: all clean run help setup
+.PHONY: all clean clean-data run help setup
 
 # 默认目标
 all: setup $(TARGET)
@@ -63,6 +63,12 @@ clean-all: clean
 	@echo "🧹 清理所有文件（包括结果）..."
 	@rm -rf $(RESULTS_DIR)
 	@echo "✅ 完全清理完成"
+
+# 清理测试产生的数据
+clean-data:
+	@echo "🧹 清理验证测试数据..."
+	@echo "  - 验证测试不产生需要清理的数据（只读取证明文件）"
+	@echo "✅ 清理完成"
 
 # 运行测试
 run: $(TARGET)

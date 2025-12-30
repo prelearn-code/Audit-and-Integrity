@@ -71,6 +71,12 @@ public:
     bool saveSummaryReport(const std::string& json_file);
     void printSummary();
 
+    /**
+     * @brief 清理验证测试产生的数据（如有临时文件）
+     * @return 成功返回true
+     */
+    bool cleanupData();
+
 private:
     // 配置
     std::string proof_dir_;               // 证明文件目录（从搜索测试生成）

@@ -234,10 +234,30 @@ VerifyPerformanceTest::ProofVerifyResult VerifyPerformanceTest::testSingleProof(
     return result;
 }
 
+bool VerifyPerformanceTest::cleanupData() {
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "🧹 清理验证测试数据" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+
+    // 验证测试主要是读取和验证，通常不产生额外文件
+    // 但保持方法以便将来扩展或清理临时文件
+    std::cout << "[清理] 验证测试不产生需要清理的数据" << std::endl;
+    std::cout << "[清理] 验证测试只读取证明文件进行验证\n" << std::endl;
+
+    std::cout << "✅ 清理完成\n" << std::endl;
+    return true;
+}
+
 bool VerifyPerformanceTest::runTest() {
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     std::cout << "开始证明验证性能测试" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+
+    // 清理验证测试数据（如有）
+    if (!cleanupData()) {
+        std::cerr << "❌ 验证数据清理失败" << std::endl;
+        return false;
+    }
 
     statistics_.start_time = getCurrentTimestamp();
     auto test_start = std::chrono::high_resolution_clock::now();

@@ -258,10 +258,61 @@ SearchPerformanceTest::KeywordTestResult SearchPerformanceTest::testSingleKeywor
     return result;
 }
 
+bool SearchPerformanceTest::cleanupData() {
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "🧹 清理搜索测试产生的数据" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+
+    namespace fs = std::filesystem;
+
+    // 清理客户端搜索Token文件
+    std::cout << "[清理] 清理客户端搜索数据..." << std::endl;
+    if (fs::exists(client_search_dir_)) {
+        int count = 0;
+        for (const auto& entry : fs::directory_iterator(client_search_dir_)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".json") {
+                std::string filename = entry.path().filename().string();
+                // 只删除搜索token文件 (search_*.json)
+                if (filename.find("search_") == 0) {
+                    fs::remove(entry.path());
+                    count++;
+                }
+            }
+        }
+        std::cout << "  ✅ 删除搜索Token文件: " << count << " 个" << std::endl;
+    }
+
+    // 清理服务端搜索证明文件
+    std::cout << "[清理] 清理服务端搜索证明数据..." << std::endl;
+    if (fs::exists(server_search_proof_dir_)) {
+        int count = 0;
+        for (const auto& entry : fs::directory_iterator(server_search_proof_dir_)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".json") {
+                std::string filename = entry.path().filename().string();
+                // 只删除证明文件 (proof_*.json)
+                if (filename.find("proof_") == 0) {
+                    fs::remove(entry.path());
+                    count++;
+                }
+            }
+        }
+        std::cout << "  ✅ 删除搜索证明文件: " << count << " 个" << std::endl;
+    }
+
+    std::cout << "\n✅ 搜索数据清理完成\n" << std::endl;
+    return true;
+}
+
 bool SearchPerformanceTest::runTest() {
     std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     std::cout << "开始搜索性能测试" << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+
+    // 清理之前的搜索数据
+    if (!cleanupData()) {
+        std::cerr << "❌ 搜索数据清理失败" << std::endl;
+        return false;
+    }
 
     statistics_.start_time = getCurrentTimestamp();
     auto test_start = std::chrono::high_resolution_clock::now();

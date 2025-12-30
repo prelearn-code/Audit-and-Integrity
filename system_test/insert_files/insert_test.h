@@ -143,6 +143,12 @@ public:
      */
     void printSummary();
 
+    /**
+     * @brief 清理所有数据库和测试产生的数据
+     * @return 成功返回true
+     */
+    bool cleanupData();
+
 private:
     // ==================== 配置参数 ====================
     std::string keywords_file_;        // 文件-关键词映射JSON路径

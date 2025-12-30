@@ -33,7 +33,7 @@ RESULTS_DIR = results
 # 构建目标
 # ============================================================
 
-.PHONY: all clean run help setup
+.PHONY: all clean clean-data run help setup
 
 # 默认目标
 all: setup $(TARGET)
@@ -63,6 +63,15 @@ clean-all: clean
 	@echo "🧹 清理所有文件（包括结果）..."
 	@rm -rf $(RESULTS_DIR)
 	@echo "✅ 完全清理完成"
+
+# 清理测试产生的数据
+clean-data:
+	@echo "🧹 清理搜索测试产生的数据..."
+	@echo "  - 清理客户端搜索Token文件 (../../vds-client/data/Search/search_*.json)"
+	@rm -f ../../vds-client/data/Search/search_*.json 2>/dev/null || true
+	@echo "  - 清理服务端搜索证明文件 (../../Storage-node/data/SearchProof/proof_*.json)"
+	@rm -f ../../Storage-node/data/SearchProof/proof_*.json 2>/dev/null || true
+	@echo "✅ 搜索数据清理完成"
 
 # 运行测试
 run: $(TARGET)

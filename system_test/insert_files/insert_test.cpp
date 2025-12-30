@@ -285,13 +285,105 @@ bool InsertPerformanceTest::initialize() {
     return true;
 }
 
+bool InsertPerformanceTest::cleanupData() {
+    std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "🧹 清理所有数据库和测试数据" << std::endl;
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
+
+    namespace fs = std::filesystem;
+
+    // 清理客户端产生的文件
+    std::cout << "[清理] 清理客户端数据..." << std::endl;
+
+    // 清理加密文件
+    if (fs::exists(client_enc_dir_)) {
+        int count = 0;
+        for (const auto& entry : fs::directory_iterator(client_enc_dir_)) {
+            if (entry.is_regular_file()) {
+                fs::remove(entry.path());
+                count++;
+            }
+        }
+        std::cout << "  ✅ 删除加密文件: " << count << " 个" << std::endl;
+    }
+
+    // 清理元数据文件
+    if (fs::exists(client_meta_dir_)) {
+        int count = 0;
+        for (const auto& entry : fs::directory_iterator(client_meta_dir_)) {
+            if (entry.is_regular_file()) {
+                fs::remove(entry.path());
+                count++;
+            }
+        }
+        std::cout << "  ✅ 删除元数据文件: " << count << " 个" << std::endl;
+    }
+
+    // 清理插入JSON文件
+    if (fs::exists(client_insert_dir_)) {
+        int count = 0;
+        for (const auto& entry : fs::directory_iterator(client_insert_dir_)) {
+            if (entry.is_regular_file()) {
+                fs::remove(entry.path());
+                count++;
+            }
+        }
+        std::cout << "  ✅ 删除插入JSON文件: " << count << " 个" << std::endl;
+    }
+
+    // 清理关键词状态文件
+    if (fs::exists(keyword_states_file_)) {
+        fs::remove(keyword_states_file_);
+        std::cout << "  ✅ 删除关键词状态文件" << std::endl;
+    }
+
+    // 清理服务端数据库
+    std::cout << "[清理] 清理服务端数据..." << std::endl;
+
+    // 清理索引数据库文件
+    std::string index_db = server_data_dir_ + "/index.json";
+    if (fs::exists(index_db)) {
+        fs::remove(index_db);
+        std::cout << "  ✅ 删除索引数据库: index.json" << std::endl;
+    }
+
+    // 清理搜索数据库文件
+    std::string search_db = server_data_dir_ + "/search.json";
+    if (fs::exists(search_db)) {
+        fs::remove(search_db);
+        std::cout << "  ✅ 删除搜索数据库: search.json" << std::endl;
+    }
+
+    // 清理加密文件存储
+    std::string server_enc = server_data_dir_ + "/EncFiles";
+    if (fs::exists(server_enc)) {
+        int count = 0;
+        for (const auto& entry : fs::directory_iterator(server_enc)) {
+            if (entry.is_regular_file()) {
+                fs::remove(entry.path());
+                count++;
+            }
+        }
+        std::cout << "  ✅ 删除服务端加密文件: " << count << " 个" << std::endl;
+    }
+
+    std::cout << "\n✅ 数据清理完成\n" << std::endl;
+    return true;
+}
+
 // ==================== 测试执行 ====================
 
 bool InsertPerformanceTest::runTest() {
     std::cout << "\n" << std::string(80, '=') << std::endl;
     std::cout << "开始插入性能测试" << std::endl;
     std::cout << std::string(80, '=') << std::endl;
-    
+
+    // 清理之前的数据
+    if (!cleanupData()) {
+        std::cerr << "❌ 数据清理失败" << std::endl;
+        return false;
+    }
+
     statistics_.start_time = getCurrentTimestamp();
     auto start = std::chrono::high_resolution_clock::now();
     
