@@ -13,13 +13,13 @@ SERVER_DIR = $(PROJECT_ROOT)/Storage-node
 TEST_DIR = .
 
 # 包含路径
-INCLUDES = -I$(CLIENT_DIR) -I$(SERVER_DIR) -I/usr/local/include
+INCLUDES = -I$(CLIENT_DIR) -I$(SERVER_DIR) -I/usr/local/include -I/usr/include/jsoncpp
 
 # 库路径和链接库
 LIBS = -L/usr/local/lib -lpbc -lgmp -lcrypto -ljsoncpp -lstdc++fs
 
 # 源文件
-SOURCES = main.cpp search_test.cpp \
+SOURCES = search_test.cpp \
           $(CLIENT_DIR)/client.cpp \
           $(SERVER_DIR)/storage_node.cpp
 

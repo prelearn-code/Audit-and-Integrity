@@ -833,13 +833,13 @@ int main() {
     
     // 4. 保存结果
     std::cout << "\n步骤 4/4: 保存结果..." << std::endl;
-    test.saveDetailedReport("insert_performance_report.csv");
-    test.saveSummaryReport("insert_performance_summary.json");
+    test.saveDetailedReport("results/insert_detailed.csv");
+    test.saveSummaryReport("results/insert_summary.json");
     
     std::cout << "\n" << std::string(80, '=') << std::endl;
     std::cout << "✅ 测试完成！" << std::endl;
-    std::cout << "详细报告: insert_performance_report.csv" << std::endl;
-    std::cout << "总结报告: insert_performance_summary.json" << std::endl;
+    std::cout << "详细报告: results/insert_detailed.csv" << std::endl;
+    std::cout << "总结报告: results/insert_summary.json" << std::endl;
     std::cout << std::string(80, '=') << std::endl;
     
     return 0;

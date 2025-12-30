@@ -395,7 +395,14 @@ int main() {
     if (!test.runTest()) {
         return 1;
     }
-    test.saveDetailedReport("search_performance_report.csv");
-    test.saveSummaryReport("search_performance_summary.json");
+    test.saveDetailedReport("results/search_detailed.csv");
+    test.saveSummaryReport("results/search_summary.json");
+
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "✅ 测试完成！" << std::endl;
+    std::cout << "详细报告: results/search_detailed.csv" << std::endl;
+    std::cout << "总结报告: results/search_summary.json" << std::endl;
+    std::cout << std::string(80, '=') << std::endl;
+
     return 0;
 }
