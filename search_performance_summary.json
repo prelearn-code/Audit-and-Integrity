@@ -1,0 +1,17 @@
+{
+  "end_time" : "2025-12-30 12:52:49",
+  "failure_count" : 7,
+  "proof_avg" : 2968,
+  "request_avg" : 431,
+  "start_time" : "2025-12-30 12:47:46",
+  "success_count" : 1150,
+  "t_client_avg" : 0.00086956521739130438,
+  "t_client_max" : 1.0,
+  "t_client_min" : 0.0,
+  "t_server_avg" : 153.15953913739128,
+  "t_server_max" : 504.79419999999999,
+  "t_server_min" : 83.529437999999999,
+  "test_name" : "database1 search performance",
+  "total_duration_sec" : 302.52999999999997,
+  "total_keywords" : 1157
+}
