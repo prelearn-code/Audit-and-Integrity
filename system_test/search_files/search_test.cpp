@@ -74,6 +74,8 @@ bool SearchPerformanceTest::loadConfig(const std::string& config_file) {
     max_keywords_ = options.get("max_keywords", 0).asInt();
     verbose_ = options.get("verbose", true).asBool();
     save_intermediate_ = options.get("save_intermediate", true).asBool();
+    use_keyword_states_ = options.get("use_keyword_states", false).asBool();
+    verify_proof_ = options.get("verify_proof", false).asBool();
 
     statistics_.test_name = config.get("test_name", "search_performance").asString();
 
@@ -89,17 +91,33 @@ bool SearchPerformanceTest::loadConfig(const std::string& config_file) {
 }
 
 bool SearchPerformanceTest::loadKeywords() {
-    Json::Value root;
-    if (!readJson(keywords_file_, root)) {
-        return false;
-    }
-    const Json::Value& arr = root["keywords"];
-    if (!arr.isArray()) {
-        std::cerr << "[错误] keywords字段不是数组" << std::endl;
-        return false;
-    }
-    for (const auto& v : arr) {
-        keywords_.push_back(v.asString());
+    if (use_keyword_states_) {
+        Json::Value root;
+        if (!readJson(keyword_states_file_, root)) {
+            std::cerr << "[错误] 读取 keyword_states.json 失败: " << keyword_states_file_ << std::endl;
+            return false;
+        }
+        const Json::Value& kw_obj = root["keywords"];
+        if (!kw_obj.isObject()) {
+            std::cerr << "[错误] keyword_states.json 缺少 keywords 对象" << std::endl;
+            return false;
+        }
+        for (const auto& name : kw_obj.getMemberNames()) {
+            keywords_.push_back(name);
+        }
+    } else {
+        Json::Value root;
+        if (!readJson(keywords_file_, root)) {
+            return false;
+        }
+        const Json::Value& arr = root["keywords"];
+        if (!arr.isArray()) {
+            std::cerr << "[错误] keywords字段不是数组" << std::endl;
+            return false;
+        }
+        for (const auto& v : arr) {
+            keywords_.push_back(v.asString());
+        }
     }
     std::cout << "[数据] 已加载关键词数量: " << keywords_.size() << std::endl;
     return true;
@@ -208,6 +226,14 @@ SearchPerformanceTest::KeywordTestResult SearchPerformanceTest::testSingleKeywor
             const Json::Value& AS = proof_json["AS"];
             if (AS.isArray()) {
                 result.result_count = AS.size();
+            }
+        }
+        if (verify_proof_) {
+            clearPerformanceData();
+            if (!server_->VerifySearchProof(proof_path.string())) {
+                result.error_msg = "搜索证明验证失败";
+                result.success = false;
+                return result;
             }
         }
     }

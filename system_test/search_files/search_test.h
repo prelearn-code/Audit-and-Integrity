@@ -73,6 +73,8 @@ private:
     int max_keywords_;
     bool verbose_;
     bool save_intermediate_;
+    bool use_keyword_states_;
+    bool verify_proof_;
 
     // 组件
     StorageClient* client_;
