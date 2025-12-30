@@ -341,17 +341,32 @@ bool InsertPerformanceTest::cleanupData() {
     std::cout << "[清理] 清理服务端数据..." << std::endl;
 
     // 清理索引数据库文件
-    std::string index_db = server_data_dir_ + "/index.json";
+    std::string index_db = server_data_dir_ + "/index_db.json";
     if (fs::exists(index_db)) {
         fs::remove(index_db);
-        std::cout << "  ✅ 删除索引数据库: index.json" << std::endl;
+        std::cout << "  ✅ 删除索引数据库: index_db.json" << std::endl;
     }
 
     // 清理搜索数据库文件
-    std::string search_db = server_data_dir_ + "/search.json";
+    std::string search_db = server_data_dir_ + "/search_db.json";
     if (fs::exists(search_db)) {
         fs::remove(search_db);
-        std::cout << "  ✅ 删除搜索数据库: search.json" << std::endl;
+        std::cout << "  ✅ 删除搜索数据库: search_db.json" << std::endl;
+    }
+
+    // 清理元数据目录
+    std::string metadata_dir = server_data_dir_ + "/metadata";
+    if (fs::exists(metadata_dir)) {
+        int count = 0;
+        for (const auto& entry : fs::directory_iterator(metadata_dir)) {
+            if (entry.is_regular_file()) {
+                fs::remove(entry.path());
+                count++;
+            }
+        }
+        if (count > 0) {
+            std::cout << "  ✅ 删除服务端元数据文件: " << count << " 个" << std::endl;
+        }
     }
 
     // 清理加密文件存储
@@ -364,7 +379,9 @@ bool InsertPerformanceTest::cleanupData() {
                 count++;
             }
         }
-        std::cout << "  ✅ 删除服务端加密文件: " << count << " 个" << std::endl;
+        if (count > 0) {
+            std::cout << "  ✅ 删除服务端加密文件: " << count << " 个" << std::endl;
+        }
     }
 
     std::cout << "\n✅ 数据清理完成\n" << std::endl;

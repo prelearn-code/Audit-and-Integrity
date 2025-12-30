@@ -23,7 +23,7 @@
     "max_keywords": 0,
     "verbose": true,
     "save_intermediate": true,
-    "use_keyword_states": true,
-    "verify_proof": true
+    "use_keyword_states": false,
+    "verify_proof": false
   }
 }

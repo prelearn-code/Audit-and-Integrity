@@ -69,16 +69,18 @@ clean-data:
 	@echo "🧹 清理插入测试产生的数据..."
 	@echo "  - 清理客户端加密文件 (../../vds-client/data/EncFiles/*.enc)"
 	@rm -f ../../vds-client/data/EncFiles/*.enc 2>/dev/null || true
-	@echo "  - 清理客户端元数据文件 (../../vds-client/data/MetaFiles/*.meta)"
-	@rm -f ../../vds-client/data/MetaFiles/*.meta 2>/dev/null || true
+	@echo "  - 清理客户端元数据文件 (../../vds-client/data/MetaFiles/*)"
+	@rm -f ../../vds-client/data/MetaFiles/* 2>/dev/null || true
 	@echo "  - 清理客户端插入JSON (../../vds-client/data/Insert/*.json)"
 	@rm -f ../../vds-client/data/Insert/*.json 2>/dev/null || true
 	@echo "  - 清理关键词状态文件 (../../vds-client/data/keyword_states.json)"
 	@rm -f ../../vds-client/data/keyword_states.json 2>/dev/null || true
-	@echo "  - 清理服务端索引数据库 (../../Storage-node/data/index.json)"
-	@rm -f ../../Storage-node/data/index.json 2>/dev/null || true
-	@echo "  - 清理服务端搜索数据库 (../../Storage-node/data/search.json)"
-	@rm -f ../../Storage-node/data/search.json 2>/dev/null || true
+	@echo "  - 清理服务端索引数据库 (../../Storage-node/data/index_db.json)"
+	@rm -f ../../Storage-node/data/index_db.json 2>/dev/null || true
+	@echo "  - 清理服务端搜索数据库 (../../Storage-node/data/search_db.json)"
+	@rm -f ../../Storage-node/data/search_db.json 2>/dev/null || true
+	@echo "  - 清理服务端元数据目录 (../../Storage-node/data/metadata/*)"
+	@rm -f ../../Storage-node/data/metadata/* 2>/dev/null || true
 	@echo "  - 清理服务端加密文件 (../../Storage-node/data/EncFiles/*.enc)"
 	@rm -f ../../Storage-node/data/EncFiles/*.enc 2>/dev/null || true
 	@echo "✅ 数据清理完成"
