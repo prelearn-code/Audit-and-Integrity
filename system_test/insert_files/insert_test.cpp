@@ -8,7 +8,7 @@
 namespace fs = std::filesystem;
 
 namespace {
-const char* kDefaultConfigPath = "system_test/insert_files/config/insert_test_config.json";
+const char* kDefaultConfigPath = "config/insert_test_config.json";
 }
 
 // ==================== 构造函数和析构函数 ====================

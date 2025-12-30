@@ -6,7 +6,7 @@
 namespace fs = std::filesystem;
 
 namespace {
-const char* kDefaultConfig = "system_test/search_files/config/search_test_config.json";
+const char* kDefaultConfig = "config/search_test_config.json";
 }
 
 SearchPerformanceTest::SearchPerformanceTest()
