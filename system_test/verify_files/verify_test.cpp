@@ -128,6 +128,11 @@ bool VerifyPerformanceTest::initialize() {
         return false;
     }
 
+    if (!server_->initialize_directories()) {
+        std::cerr << "[错误] 服务端目录初始化失败" << std::endl;
+        return false;
+    }
+
     // 预加载服务端的数据库和索引 - 这部分时间不计入性能测试
     std::cout << "[初始化] 服务端预加载数据库和索引..." << std::endl;
     auto load_start = std::chrono::high_resolution_clock::now();
