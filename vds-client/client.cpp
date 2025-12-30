@@ -669,9 +669,17 @@ bool StorageClient::encryptFile(const std::string& file_path,
     
     std::cout << "\n[文件加密] 开始加密文件: " << file_path << std::endl;
     
-    // 提取原始文件名
+    // 提取原始文件名，并使用绝对路径生成唯一文件名前缀
     std::string original_filename = extractFileName(file_path);
+    fs::path abs_path = fs::absolute(file_path).lexically_normal();
+    std::string abs_str = abs_path.string();
+    std::string safe_name = abs_str;
+    std::replace(safe_name.begin(), safe_name.end(), '/', '_');
+    std::replace(safe_name.begin(), safe_name.end(), '\\', '_');
+    std::replace(safe_name.begin(), safe_name.end(), ':', '_');
+    
     std::cout << "[加密] 原始文件名: " << original_filename << std::endl;
+    std::cout << "[加密] 绝对路径: " << abs_str << std::endl;
     
     // ========== 开始计时：T1 客户端加密总时间 ==========
     PERF_TIMER_START(client_encrypt_total)
@@ -706,8 +714,8 @@ bool StorageClient::encryptFile(const std::string& file_path,
     
     // ========== v4.1修改：使用新的目录结构和唯一文件名 ==========
     
-    // 1. 生成唯一的加密文件路径
-    std::string enc_filename = original_filename + ".enc";
+    // 1. 生成唯一的加密文件路径（使用绝对路径生成的安全名称）
+    std::string enc_filename = safe_name + ".enc";
     std::string enc_file = generateUniqueFilePath(ENC_FILES_DIR, enc_filename);
     
     if (!writeFile(enc_file, ciphertext)) {
@@ -785,7 +793,7 @@ bool StorageClient::encryptFile(const std::string& file_path,
     insert_json["state"] = "valid";
     insert_json["keywords"] = keywords_data;
     
-    // 使用与加密文件相同的基础名生成insert文件名
+    // 使用与加密文件相同的基础名生成insert文件名（含绝对路径信息）
     fs::path enc_path(enc_file);
     std::string base_name = enc_path.stem().string(); // 移除.enc扩展名
     std::string insert_filename = base_name + "_insert.json";
@@ -806,7 +814,7 @@ bool StorageClient::encryptFile(const std::string& file_path,
     // 3. 生成并保存元数据到 MetaFiles 目录
     Json::Value metadata;
     metadata["file_id"] = file_id;
-    metadata["original_file"] = file_path;
+    metadata["original_file"] = abs_str;
     metadata["encrypted_file"] = enc_file;
     metadata["keywords"] = Json::Value(Json::arrayValue);
     for (const auto& kw : keywords) {
