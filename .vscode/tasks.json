@@ -2,42 +2,125 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build:insert_test",
+      "label": "build:insert_perf_test",
       "type": "shell",
-      "command": "/usr/bin/g++",
-      "args": [
-        "-fdiagnostics-color=always",
-        "-std=c++17",
-        "-g",
-        "-O0",
-        "${workspaceFolder}/system_test/insert_files/insert_test.cpp",
-        "${workspaceFolder}/Storage-node/storage_node.cpp",
-        "${workspaceFolder}/vds-client/client.cpp",
-        "-I",
-        "${workspaceFolder}/Storage-node",
-        "-I",
-        "${workspaceFolder}/system_test/insert_files",
-        "-I",
-        "${workspaceFolder}/vds-client",
-        "-I",
-        "/usr/local/include",
-        "-I",
-        "/usr/include/jsoncpp",
-        "-L",
-        "/usr/local/lib",
-        "-o",
-        "${workspaceFolder}/bin/insert_test",
-        "-lpbc",
-        "-lgmp",
-        "-ljsoncpp",
-        "-lcrypto",
-        "-lssl",
-        "-lpthread"
-      ],
+      "command": "make",
+      "args": [],
       "options": {
-        "cwd": "${workspaceFolder}"
+        "cwd": "${workspaceFolder}/system_test/insert_files"
       },
-      "problemMatcher": ["$gcc"]
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": ["$gcc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "run:insert_perf_test",
+      "type": "shell",
+      "command": "make",
+      "args": ["run"],
+      "options": {
+        "cwd": "${workspaceFolder}/system_test/insert_files"
+      },
+      "dependsOn": ["build:insert_perf_test"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "build:search_perf_test",
+      "type": "shell",
+      "command": "make",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/system_test/search_files"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": ["$gcc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "run:search_perf_test",
+      "type": "shell",
+      "command": "make",
+      "args": ["run"],
+      "options": {
+        "cwd": "${workspaceFolder}/system_test/search_files"
+      },
+      "dependsOn": ["build:search_perf_test"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "run:end_to_end_test (quick)",
+      "type": "shell",
+      "command": "./run_end_to_end_test.sh",
+      "args": ["quick"],
+      "options": {
+        "cwd": "${workspaceFolder}/system_test"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "run:end_to_end_test (standard)",
+      "type": "shell",
+      "command": "./run_end_to_end_test.sh",
+      "args": ["standard"],
+      "options": {
+        "cwd": "${workspaceFolder}/system_test"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "run:end_to_end_test (full)",
+      "type": "shell",
+      "command": "./run_end_to_end_test.sh",
+      "args": ["full"],
+      "options": {
+        "cwd": "${workspaceFolder}/system_test"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "clean:all_tests",
+      "type": "shell",
+      "command": "cd insert_files && make clean && cd ../search_files && make clean",
+      "options": {
+        "cwd": "${workspaceFolder}/system_test"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
     },
     {
       "label": "build:proof_gen_test",
@@ -103,44 +186,6 @@
         "/usr/local/lib",
         "-o",
         "${workspaceFolder}/bin/proof_verify_test",
-        "-lpbc",
-        "-lgmp",
-        "-ljsoncpp",
-        "-lcrypto",
-        "-lssl",
-        "-lpthread"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": ["$gcc"]
-    },
-    {
-      "label": "build:search_test",
-      "type": "shell",
-      "command": "/usr/bin/g++",
-      "args": [
-        "-fdiagnostics-color=always",
-        "-std=c++17",
-        "-g",
-        "-O0",
-        "${workspaceFolder}/system_test/search_files/search_test.cpp",
-        "${workspaceFolder}/Storage-node/storage_node.cpp",
-        "${workspaceFolder}/vds-client/client.cpp",
-        "-I",
-        "${workspaceFolder}/Storage-node",
-        "-I",
-        "${workspaceFolder}/system_test/search_files",
-        "-I",
-        "${workspaceFolder}/vds-client",
-        "-I",
-        "/usr/local/include",
-        "-I",
-        "/usr/include/jsoncpp",
-        "-L",
-        "/usr/local/lib",
-        "-o",
-        "${workspaceFolder}/bin/search_test",
         "-lpbc",
         "-lgmp",
         "-ljsoncpp",
