@@ -1,21 +1,21 @@
 {
   "test_name": "database1 search performance",
   "paths": {
-    "keywords_file": "system_test/search_files/data/search_keywords.json",
-    "public_params": "vds-client/data/public_params.json",
-    "private_key": "vds-client/data/private_key.dat",
+    "keywords_file": "data/search_keywords.json",
+    "public_params": "../../vds-client/data/public_params.json",
+    "private_key": "../../vds-client/data/private_key.dat",
     "client": {
-      "data_dir": "vds-client/data",
-      "insert_dir": "vds-client/data/Insert",
-      "enc_dir": "vds-client/data/EncFiles",
-      "metadata_dir": "vds-client/data/MetaFiles",
-      "search_dir": "vds-client/data/Search",
-      "deles_dir": "vds-client/data/Deles",
-      "keyword_states_file": "vds-client/data/keyword_states.json"
+      "data_dir": "../../vds-client/data",
+      "insert_dir": "../../vds-client/data/Insert",
+      "enc_dir": "../../vds-client/data/EncFiles",
+      "metadata_dir": "../../vds-client/data/MetaFiles",
+      "search_dir": "../../vds-client/data/Search",
+      "deles_dir": "../../vds-client/data/Deles",
+      "keyword_states_file": "../../vds-client/data/keyword_states.json"
     },
     "server": {
-      "data_dir": "Storage-node/data",
-      "search_proof_dir": "Storage-node/data/SearchProof",
+      "data_dir": "../../Storage-node/data",
+      "search_proof_dir": "../../Storage-node/data/SearchProof",
       "port": 9000
     }
   },

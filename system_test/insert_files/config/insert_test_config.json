@@ -1,23 +1,23 @@
 {
   "test_name": "database1 insert performance",
   "paths": {
-    "keywords_file": "system_test/insert_files/data/database1_keywords.json",
-    "dataset_root": "make_data/database1",
-    "public_params": "vds-client/data/public_params.json",
-    "private_key": "vds-client/data/private_key.dat",
+    "keywords_file": "data/database1_keywords.json",
+    "dataset_root": "../../make_data/database1",
+    "public_params": "../../vds-client/data/public_params.json",
+    "private_key": "../../vds-client/data/private_key.dat",
     "client": {
-      "data_dir": "vds-client/data",
-      "insert_dir": "vds-client/data/Insert",
-      "enc_dir": "vds-client/data/EncFiles",
-      "metadata_dir": "vds-client/data/MetaFiles",
-      "search_dir": "vds-client/data/Search",
-      "deles_dir": "vds-client/data/Deles",
-      "keyword_states_file": "vds-client/data/keyword_states.json"
+      "data_dir": "../../vds-client/data",
+      "insert_dir": "../../vds-client/data/Insert",
+      "enc_dir": "../../vds-client/data/EncFiles",
+      "metadata_dir": "../../vds-client/data/MetaFiles",
+      "search_dir": "../../vds-client/data/Search",
+      "deles_dir": "../../vds-client/data/Deles",
+      "keyword_states_file": "../../vds-client/data/keyword_states.json"
     },
     "server": {
-      "data_dir": "Storage-node/data",
-      "insert_dir": "vds-client/data/Insert",
-      "enc_dir": "vds-client/data/EncFiles",
+      "data_dir": "../../Storage-node/data",
+      "insert_dir": "../../vds-client/data/Insert",
+      "enc_dir": "../../vds-client/data/EncFiles",
       "port": 9000
     }
   },
