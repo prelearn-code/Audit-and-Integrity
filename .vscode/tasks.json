@@ -68,6 +68,39 @@
       }
     },
     {
+      "label": "build:verify_perf_test",
+      "type": "shell",
+      "command": "make",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/system_test/verify_files"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": ["$gcc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "run:verify_perf_test",
+      "type": "shell",
+      "command": "make",
+      "args": ["run"],
+      "options": {
+        "cwd": "${workspaceFolder}/system_test/verify_files"
+      },
+      "dependsOn": ["build:verify_perf_test"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
       "label": "run:end_to_end_test (quick)",
       "type": "shell",
       "command": "./run_end_to_end_test.sh",
@@ -112,7 +145,7 @@
     {
       "label": "clean:all_tests",
       "type": "shell",
-      "command": "cd insert_files && make clean && cd ../search_files && make clean",
+      "command": "cd insert_files && make clean && cd ../search_files && make clean && cd ../verify_files && make clean",
       "options": {
         "cwd": "${workspaceFolder}/system_test"
       },

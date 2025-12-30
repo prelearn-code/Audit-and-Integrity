@@ -1,6 +1,6 @@
 # VDS 性能测试框架
 
-完整的端到端性能测试框架，用于测试 VDS (Verifiable Dynamic Searchable) 系统的插入和搜索性能。
+完整的端到端性能测试框架，用于测试 VDS (Verifiable Dynamic Searchable) 系统的插入、搜索和验证性能。
 
 ## 📁 项目结构
 
@@ -24,6 +24,15 @@ system_test/
 │   ├── results/               # 测试结果输出目录（自动创建）
 │   ├── search_test.h          # 搜索测试类定义
 │   ├── search_test.cpp        # 搜索测试类实现（包含main函数）
+│   └── Makefile               # 编译配置
+│
+├── verify_files/              # 证明验证性能测试
+│   ├── config/
+│   │   └── verify_test_config.json   # 验证测试配置
+│   ├── data/                  # （从搜索测试读取证明文件）
+│   ├── results/               # 测试结果输出目录（自动创建）
+│   ├── verify_test.h          # 验证测试类定义
+│   ├── verify_test.cpp        # 验证测试类实现（包含main函数）
 │   └── Makefile               # 编译配置
 │
 ├── install_dependencies.sh    # 依赖库自动安装脚本
@@ -106,6 +115,44 @@ make show-results
 make clean
 ```
 
+#### 3. 证明验证性能测试
+
+**注意**：验证测试需要先运行搜索测试生成证明文件。
+
+```bash
+cd system_test/verify_files
+
+# 编译
+make
+
+# 运行（使用默认配置）
+make run
+
+# 使用自定义配置
+make run-config CONFIG=my_config.json
+
+# 查看结果
+make show-results
+
+# 清理
+make clean
+```
+
+#### 4. 完整测试流程（推荐）
+
+按顺序运行插入、搜索、验证测试：
+
+```bash
+# 1. 插入测试
+cd system_test/insert_files && make run
+
+# 2. 搜索测试（生成证明文件）
+cd ../search_files && make run
+
+# 3. 验证测试（验证证明文件）
+cd ../verify_files && make run
+```
+
 ### 方式三：使用 VSCode 任务
 
 在 VSCode 中按 `Ctrl+Shift+P`，选择 "Tasks: Run Task"，然后选择：
@@ -114,6 +161,8 @@ make clean
 - `run:insert_perf_test` - 运行插入测试
 - `build:search_perf_test` - 编译搜索测试
 - `run:search_perf_test` - 运行搜索测试
+- `build:verify_perf_test` - 编译验证测试
+- `run:verify_perf_test` - 运行验证测试
 - `run:end_to_end_test (quick)` - 运行快速端到端测试
 - `run:end_to_end_test (standard)` - 运行标准端到端测试
 - `run:end_to_end_test (full)` - 运行完整端到端测试
@@ -142,14 +191,27 @@ make clean
 
 | 指标 | 说明 |
 |------|------|
-| **t_client_ms** | 客户端令牌生成时间（毫秒） |
-| **t_server_ms** | 服务端搜索时间（毫秒） |
-| **request_size** | 搜索请求 JSON 大小（字节） |
-| **proof_size** | 搜索证明 JSON 大小（字节） |
+| **t_client_token_gen_ms** | 客户端Token生成时间（毫秒） |
+| **t_server_proof_calc_ms** | 服务端纯证明计算时间（毫秒，不含加载） |
+| **token_size_bytes** | Token文件大小（字节） |
+| **proof_size_bytes** | 证明文件大小（字节） |
 | **result_count** | 命中文件数 |
 | **success** | 是否成功 |
 
-统计数据包括：平均值、最小值、最大值
+统计数据包括：
+- 客户端：总时间、平均值、最小值、最大值、标准差、QPS
+- 服务端：总时间、平均值、最小值、最大值、标准差、QPS
+
+### 证明验证性能测试指标
+
+| 指标 | 说明 |
+|------|------|
+| **t_verify_ms** | 纯证明验证时间（毫秒，不含加载） |
+| **proof_size_bytes** | 证明文件大小（字节） |
+| **result_count** | 证明中的文件数 |
+| **success** | 是否验证成功 |
+
+统计数据包括：总验证时间、平均值、最小值、最大值、标准差、验证吞吐量（验证/秒）
 
 ## 📝 配置文件说明
 
@@ -216,6 +278,31 @@ make clean
 }
 ```
 
+### 验证测试配置 (verify_test_config.json)
+
+```json
+{
+  "test_name": "database1 verify performance",
+  "paths": {
+    "proof_dir": "../../Storage-node/data/SearchProof",
+    "public_params": "../../vds-client/data/public_params.json",
+    "private_key": "../../vds-client/data/private_key.dat",
+    "client": {
+      "data_dir": "../../vds-client/data"
+    },
+    "server": {
+      "data_dir": "../../Storage-node/data",
+      "port": 9000
+    }
+  },
+  "options": {
+    "max_proofs": 0,           // 0 = 验证所有证明
+    "verbose": true,
+    "save_intermediate": true
+  }
+}
+```
+
 ## 📂 输出结果
 
 ### 插入测试结果
@@ -227,6 +314,11 @@ make clean
 
 - **search_detailed.csv** - 每个关键词的详细性能数据（CSV格式）
 - **search_summary.json** - 统计摘要（JSON格式）
+
+### 验证测试结果
+
+- **verify_detailed.csv** - 每个证明的详细验证性能数据（CSV格式）
+- **verify_summary.json** - 统计摘要（JSON格式）
 
 ### 端到端测试结果
 
@@ -260,7 +352,17 @@ end_to_end_results_20250130_123456/
    └─> 选项 B：使用 search_keywords.json
        └─> 测试指定的关键词列表
 
-3. 端到端测试
+   性能测量：
+   ├─> 客户端：只测量 Token 生成时间
+   └─> 服务端：只测量纯证明计算时间（数据库已预加载）
+   └─> 生成证明文件（SearchProof/proof_*.json）
+
+3. 验证测试
+   ├─> 读取搜索测试生成的证明文件（SearchProof/proof_*.json）
+   ├─> 预加载数据库和公共参数（不计入性能测试）
+   └─> 只测量纯证明验证时间
+
+4. 端到端测试
    └─> 自动运行插入测试 → 搜索测试 → 生成综合报告
 ```
 

@@ -1,0 +1,20 @@
+{
+  "test_name": "database1 verify performance",
+  "paths": {
+    "proof_dir": "../../Storage-node/data/SearchProof",
+    "public_params": "../../vds-client/data/public_params.json",
+    "private_key": "../../vds-client/data/private_key.dat",
+    "client": {
+      "data_dir": "../../vds-client/data"
+    },
+    "server": {
+      "data_dir": "../../Storage-node/data",
+      "port": 9000
+    }
+  },
+  "options": {
+    "max_proofs": 0,
+    "verbose": true,
+    "save_intermediate": true
+  }
+}
