@@ -98,20 +98,30 @@ bool VerifyPerformanceTest::initialize() {
     std::cout << "[初始化] 初始化客户端..." << std::endl;
     client_ = new StorageClient();
 
-    if (!client_->load_public_params(public_params_file_)) {
-        std::cerr << "[错误] 客户端加载公共参数失败" << std::endl;
+    // 配置数据目录
+    StorageClient::configureDataDirectories(
+        client_data_dir_,
+        client_data_dir_ + "/Insert",
+        client_data_dir_ + "/EncFiles",
+        client_data_dir_ + "/MetaFiles",
+        client_data_dir_ + "/Search",
+        client_data_dir_ + "/Deles",
+        client_data_dir_ + "/keyword_states.json");
+
+    if (!client_->initialize(public_params_file_)) {
+        std::cerr << "[错误] 客户端初始化失败" << std::endl;
         return false;
     }
 
-    // 加载或生成密钥
-    if (fs::exists(private_key_file_)) {
-        if (!client_->loadKeys(private_key_file_)) {
-            std::cerr << "[错误] 客户端加载密钥失败" << std::endl;
-            return false;
-        }
-    } else {
-        std::cout << "[初始化] 密钥文件不存在，生成新密钥..." << std::endl;
-        if (!client_->generateKeys()) {
+    if (!client_->initializeDataDirectories()) {
+        std::cerr << "[错误] 客户端目录初始化失败" << std::endl;
+        return false;
+    }
+
+    // 加载密钥
+    if (!client_->loadKeys(private_key_file_)) {
+        std::cout << "[初始化] 未找到密钥，生成新密钥..." << std::endl;
+        if (!client_->generateKeys(private_key_file_)) {
             std::cerr << "[错误] 密钥生成失败" << std::endl;
             return false;
         }
