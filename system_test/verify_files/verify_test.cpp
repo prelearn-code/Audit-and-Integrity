@@ -65,11 +65,9 @@ bool VerifyPerformanceTest::loadProofFiles() {
 
     for (const auto& entry : fs::directory_iterator(proof_dir_)) {
         if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            std::string filename = entry.path().filename().string();
-            // 只加载搜索证明文件 (proof_*.json 格式)
-            if (filename.find("proof_") == 0) {
-                proof_files_.push_back(entry.path().string());
-            }
+            // 加载所有 .json 文件作为证明文件
+            // 证明文件格式: <keyword_hash>.json 或 <keyword_hash><file_id>.json
+            proof_files_.push_back(entry.path().string());
         }
     }
 
