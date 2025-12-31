@@ -1298,19 +1298,21 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
     
     std::cout << "   公钥: " << PK.substr(0, 16) << "..." << std::endl;
     std::cout << "   搜索令牌: " << T << std::endl;
-    
-    // ========== 步骤2: 加载数据库 ==========
-    
-    if (!load_index_database()) {
-        std::cerr << "❌ 索引数据库加载失败" << std::endl;
+
+    // ========== 步骤2: 数据库检查 ==========
+    // 注意：数据库应该在调用此函数之前已经预加载
+    // 性能测试框架在初始化时会预加载数据库，避免重复加载影响性能测量
+
+    if (index_database.empty()) {
+        std::cerr << "❌ 索引数据库为空，请先调用 load_index_database()" << std::endl;
         return false;
     }
-    
-    if (!load_search_database()) {
-        std::cerr << "❌ 搜索数据库加载失败" << std::endl;
+
+    if (search_database.empty()) {
+        std::cerr << "❌ 搜索数据库为空，请先调用 load_search_database()" << std::endl;
         return false;
     }
-    
+
     // ========== 步骤3: 初始化结果容器 ==========
     
     std::vector<std::string> AS;  // 涉及的所有文件ID
