@@ -6,6 +6,27 @@
 #include <algorithm>
 #include <cstring>
 
+namespace {
+class ScopedTimerServer {
+public:
+    ScopedTimerServer(PerformanceCallback_s* cb, const std::string& name)
+        : cb_(cb), name_(name), active_(cb != nullptr),
+          start_(std::chrono::high_resolution_clock::now()) {}
+    ~ScopedTimerServer() {
+        if (active_) {
+            auto end = std::chrono::high_resolution_clock::now();
+            double ms = std::chrono::duration<double, std::milli>(end - start_).count();
+            cb_->on_phase_complete(name_, ms);
+        }
+    }
+private:
+    PerformanceCallback_s* cb_;
+    std::string name_;
+    bool active_;
+    std::chrono::high_resolution_clock::time_point start_;
+};
+} // namespace
+
 // ==================== 构造函数和析构函数 ====================
 
 StorageNode::StorageNode(const std::string& data_directory, int port) 
@@ -927,6 +948,7 @@ void StorageNode::update_statistics(const std::string& operation) {
 // ==================== 文件操作 ====================
 
 bool StorageNode::insert_file(const std::string& param_json_path, const std::string& enc_file_path) {
+    ScopedTimerServer timer(perf_callback_s, "server_insert_total");
     std::cout << "\n📤 插入文件..." << std::endl;
     std::cout << "   参数文件: " << param_json_path << std::endl;
     std::cout << "   加密文件: " << enc_file_path << std::endl;
@@ -1304,6 +1326,9 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
     // 新增：生成随机种子（在循环开始前生成一次）
     std::string search_seed = generate_random_seed();
     std::cout << "   生成搜索种子: " << search_seed.substr(0, 16) << "..." << std::endl;
+
+    // 用于统计计算证明时间（不计入数据库/文件读取）
+    double compute_ms_total = 0.0;
     
     // ========== 步骤4: 主搜索循环 ==========
     
@@ -1388,13 +1413,15 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
             
             std::cout << "   块数量: " << n << std::endl;
             
-            // 加载密文文件
+            // 加载密文文件（不计入计时）
             std::string ciphertext;
             if (!load_encrypted_file(ID_F, ciphertext)) {
                 std::cerr << "❌ 无法加载密文文件: " << ID_F << std::endl;
                 st_alpha = st_alpha_next;
                 continue;
             }
+            
+            auto proof_start = std::chrono::high_resolution_clock::now();
             
             // 使用在步骤3中生成的search_seed
             std::string seed = search_seed;
@@ -1504,6 +1531,9 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
             PS.push_back(temp_result);
             
             std::cout << "   ✅ 证明生成完成" << std::endl;
+
+            auto proof_end = std::chrono::high_resolution_clock::now();
+            compute_ms_total += std::chrono::duration<double, std::milli>(proof_end - proof_start).count();
         } else {
             std::cout << "   ⚠️  文件状态为 invalid，跳过证明生成" << std::endl;
         }
@@ -1568,6 +1598,10 @@ bool StorageNode::SearchKeywordsAssociatedFilesProof(const std::string& search_j
     std::cout << "   输出文件: " << output_path << std::endl;
     std::cout << "   涉及文件数: " << AS.size() << std::endl;
     std::cout << "   有效证明数: " << PS.size() << std::endl;
+
+    if (perf_callback_s) {
+        perf_callback_s->on_phase_complete("server_search_total", compute_ms_total);
+    }
     
     // 新增：清理资源
     element_clear(global_phi);
@@ -1831,6 +1865,9 @@ bool StorageNode::VerifySearchProof(const std::string& search_proof_json_path) {
         std::cerr << "❌ 索引数据库加载失败" << std::endl;
         return false;
     }
+
+    // 仅对验证计算过程计时（不含文件/DB加载）
+    ScopedTimerServer timer(perf_callback_s, "server_search_verify_total");
     
     // 获取第一个文件的索引信息（用于获取n和PK）
     if (AS.empty()) {

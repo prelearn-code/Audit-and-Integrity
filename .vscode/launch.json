@@ -5,19 +5,50 @@
       "name": "Debug insert_test",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/system_test/insert_files/insert_test",
-      "args": [
-        "--out",
-        "${workspaceFolder}/out/insert",
-        "--data-dir",
-        "${workspaceFolder}/node_data",
-        "--param",
-        "${workspaceFolder}/data/insert.json",
-        "--enc",
-        "${workspaceFolder}/data/test.enc"
-      ],
+      "program": "${workspaceFolder}/bin/insert_test",
+      "args": [],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "build:insert_test",
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "setupCommands": [
+        {
+          "description": "Enable pretty printing",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "Debug search_test",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/search_test",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build:search_test",
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "setupCommands": [
+        {
+          "description": "Enable pretty printing",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "Debug proof_verify_performance",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/proof_verify_performance",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build:proof_verify_performance",
       "MIMode": "gdb",
       "miDebuggerPath": "/usr/bin/gdb",
       "stopAtEntry": false,
